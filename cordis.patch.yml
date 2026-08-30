@@ -1,0 +1,4 @@
+# client-find bundle patch(insert 语法声明条目)
+- insert:
+  - name: client-find
+    id: client-find
