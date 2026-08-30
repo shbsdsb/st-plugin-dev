@@ -1,0 +1,4 @@
+# st-ui-slots bundle patch(insert 语法声明条目)
+- insert:
+  - name: st-ui-slots
+    id: st-ui-slots
