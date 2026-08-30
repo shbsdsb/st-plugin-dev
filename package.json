@@ -1,0 +1,30 @@
+{
+  "name": "web-module",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "浏览器端模块运行时 + module table:封装 react/react-dom/cordis 核心依赖,importmap 统一解析",
+  "main": "lib/index.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "cordis": "file:../../agent_plugin_feat/vendor/cordis",
+    "esbuild": "^0.28.0",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "@standard-schema/spec": "file:../../agent_plugin_feat/vendor/standard-schema"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "^5.7.3",
+    "vitest": "^4.1.11"
+  },
+  "st": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  }
+}

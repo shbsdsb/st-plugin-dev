@@ -1,0 +1,4 @@
+# web-module bundle patch(insert 语法声明条目)
+- insert:
+  - name: web-module
+    id: web-module
