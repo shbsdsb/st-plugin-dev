@@ -1,0 +1,4 @@
+# hot-reload-plugin bundle patch(insert 语法声明条目)
+- insert:
+  - name: hot-reload-plugin
+    id: hot-reload-plugin

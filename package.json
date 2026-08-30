@@ -1,0 +1,25 @@
+{
+  "name": "hot-reload-plugin",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "基于 pnpm-lock.yaml 变更的保守热更新:监控 lock 哈希 → 定位变更插件 → 隔离验证后替换",
+  "main": "lib/index.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@cordisjs/plugin-loader": "file:../../agent_plugin_feat/vendor/cordis-loader",
+    "cordis": "file:../../agent_plugin_feat/vendor/cordis"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "^5.7.3",
+    "vitest": "^4.1.11"
+  },
+  "st": {
+    "bundle": { "patch": "./cordis.patch.yml" }
+  }
+}
