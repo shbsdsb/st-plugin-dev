@@ -1,0 +1,19 @@
+# ============ 纯白名单 .gitignore ============
+# 默认忽略所有文件/目录,仅放行以下明确列出的内容。
+# 新增需入库文件时,在此追加 `!` 放行规则;node_modules/日志/.env/docs 一律不入库。
+
+/*
+!/.gitignore
+!/package.json
+!/pnpm-lock.yaml
+!/cordis.patch.yml
+!/tsconfig.json
+!/vitest.config.ts
+
+# 源码 / 测试 / 构建产物(lib 为 tsc 产物,cordis.patch.yml bundle 依赖,必须入库)
+!/src/
+!/tests/
+!/lib/
+!/src/**
+!/tests/**
+!/lib/**

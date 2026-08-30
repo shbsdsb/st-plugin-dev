@@ -1,0 +1,4 @@
+# host bundle patch(insert 语法声明条目)
+- insert:
+  - name: host-plugin
+    id: host
