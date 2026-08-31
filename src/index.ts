@@ -19,18 +19,17 @@ declare module 'cordis' {
 }
 
 export interface WebModuleConfig {
-  /** 默认前端插件(访问根路径 / 或 /shell 无 plugin 参数时自动加载,如 'st-ui-slots') */
-  defaultPlugin?: string
+  // 无配置项:默认宿主由 web-module 自生成(boot 清单第一个可加载插件);
+  // config 仅作为功能开关入口,不承载实现方式信息
 }
 
-/** web-module Config schema(cordis Standard Schema v1):defaultPlugin 校验 */
+/** web-module Config schema(空:不接收任何实现信息,默认宿主自生成) */
 export const WebModuleConfigSchema = {
   '~standard': {
     version: 1,
     vendor: 'web-module',
-    validate(value: unknown) {
-      const raw = (value && typeof value === 'object' ? value : {}) as Record<string, unknown>
-      return { value: { defaultPlugin: typeof raw.defaultPlugin === 'string' ? raw.defaultPlugin : undefined } }
+    validate() {
+      return { value: {} }
     },
   },
 } satisfies StandardSchemaV1<Record<string, unknown>, WebModuleConfig>
@@ -41,7 +40,8 @@ export function apply(ctx: Context, config: WebModuleConfig) {
   const table = new ModuleTable()
   ctx.provide('webModule', table)
   const boot = ctx.clientBoot.boot   // inject ['clientBoot'] 保证可用(必需依赖)
-  const defaultPlugin = config.defaultPlugin
+  // 自生成默认宿主:不从 config 取实现信息,自动选 boot 清单第一个可加载插件
+  const defaultPlugin = boot[0]?.id
 
   const write = (res: ServerResponse, status: number, body: string, type: string) => {
     res.writeHead(status, { 'content-type': type })

@@ -22,7 +22,7 @@ describe('web-module', () => {
     ;(ctx as unknown as { provide: (k: string, v: unknown) => void }).provide('clientBoot', {
       boot: [{ id: 'hello-web', url: '/hello-web/index.cjs', inject: [], immed: true }],
     })
-    apply(ctx as never, { defaultPlugin: 'st-ui-slots' })
+    apply(ctx as never, {})
     expect((ctx as unknown as { webModule: unknown }).webModule).toBeDefined()
 
     await ws.start(0, '127.0.0.1')
@@ -41,7 +41,7 @@ describe('web-module', () => {
       expect(shellText).toContain('window.__ModuleLoader__')
       expect(shellText).toContain('window.CLIENT_BOOT')
       expect(shellText).toContain('"hello-web"')
-      expect(shellText).toContain('st-ui-slots')   // defaultPlugin 内嵌,无 plugin 参数自动加载
+      expect(shellText).toContain('pluginId = params.get(\'plugin\') ?? "hello-web"')   // 自生成默认宿主(boot[0].id)
 
       const im = await fetch(base + '/shell/importmap.json')
       expect(im.status).toBe(200)
@@ -58,6 +58,25 @@ describe('web-module', () => {
       ctx.dispose?.()
     }
   }, 30000)
+
+  it('defaultPlugin 未配置时自生成(boot 第一个插件作为默认宿主)', async () => {
+    const ctx = new Context()
+    const ws = new WebServerService()
+    ;(ctx as unknown as { provide: (k: string, v: unknown) => void }).provide('webServer', ws)
+    ;(ctx as unknown as { provide: (k: string, v: unknown) => void }).provide('clientBoot', {
+      boot: [
+        { id: 'host-a', url: '/plugins/host-a/index.cjs', inject: [], immed: true },
+        { id: 'aux-b', url: '/plugins/aux-b/index.cjs', inject: [], immed: true },
+      ],
+    })
+    // 不传 config(自生成):/shell 页面应内嵌 boot[0].id 作为默认入口
+    apply(ctx as never, {})
+    await ws.start(0, '127.0.0.1')
+    const { port } = ws.server.address() as { port: number }
+    const shell = await (await fetch(`http://127.0.0.1:${port}/shell`)).text()
+    expect(shell).toContain('pluginId = params.get(\'plugin\') ?? "host-a"')
+    await new Promise<void>((r) => ws.server.close(() => r()))
+  })
 
   it('clientBoot service 缺失时 apply 抛错(必需依赖)', () => {
     const ctx = new Context()
