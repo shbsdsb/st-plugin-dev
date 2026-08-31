@@ -41,7 +41,8 @@ describe('renderShellPage', () => {
   it('入口挂载后遍历 CLIENT_BOOT 挂载其余辅助插件(mount 校验)', () => {
     const html = renderShellPage(service, boot)
     expect(html).toContain('for (const entry of window.CLIENT_BOOT)')
-    expect(html).toContain('entry.url === entryUrl')
+    expect(html).toContain('entry.id === entryUrl')
+    expect(html).toContain('__ModuleLoader__.require(entry.id)')
     expect(html).toContain("typeof aux.mount === 'function'")
     expect(html).toContain('mounted auxiliary')
   })
