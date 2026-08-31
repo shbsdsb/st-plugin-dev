@@ -78,16 +78,16 @@ ${keyframes}
   border-radius: 14px !important;
   box-shadow: 0 8px 32px rgba(31, 38, 135, 0.10), inset 0 1px 0 rgba(255, 255, 255, 0.85) !important;
 }
-/* nav:取消示例边框,透明玻璃条 */
+/* nav:取消示例边框,玻璃条;上方留顶距、下方与内容留空隙 */
 [data-slot="nav"] {
   border: none !important;
   border-bottom: 1px solid rgba(255, 255, 255, 0.5) !important;
   border-radius: 0 0 14px 14px !important;
-  margin: 0 10px !important;
+  margin: 10px 10px 12px !important;
 }
-/* sidebar:取消示例左右边框 */
-[data-slot="sidebar-left"] { border-right: none !important; border-radius: 14px 0 0 14px !important; }
-[data-slot="sidebar-right"] { border-left: none !important; border-radius: 0 14px 14px 0 !important; }
+/* sidebar:取消示例左右边框;上方两角圆角(补齐靠中间一侧上方圆角),下方靠中间一侧直角 */
+[data-slot="sidebar-left"] { border-right: none !important; border-radius: 14px 14px 0 14px !important; }
+[data-slot="sidebar-right"] { border-left: none !important; border-radius: 14px 14px 14px 0 !important; }
 /* main:轻微玻璃,内容优先 */
 [data-slot="main"] {
   background: rgba(255, 255, 255, 0.32) !important;
