@@ -124,16 +124,17 @@ export function Layout(props: { registry: SlotRegistry }): React.ReactElement {
           React.createElement('div', { style: { padding: '6px 8px', display: 'flex', justifyContent: 'flex-end' } },
             btn(React.createElement(IconDotChevron, { dir: 'left' }), () => setCollapsed(true), '收起侧边栏')),
           React.createElement('div', { ref: slotRef('sidebar-left'), style: { flex: 1, padding: 8 } })),
-        React.createElement('div', { onMouseDown: (e) => startDrag(e, side), style: { width: 4, cursor: 'col-resize', flexShrink: 0 } }))
+        React.createElement('div', { className: 'st-drag-handle', onMouseDown: (e) => startDrag(e, side), style: { width: 4, cursor: 'col-resize', flexShrink: 0 } }))
     }
     // right:完全收起(不渲染;展开按钮在 main 右上角)
     if (collapsed) return null
+    // 拖拽条在容器左侧(main 侧),与 main 之间留出间隔,边界清晰且与左侧对称
     return React.createElement(React.Fragment, null,
+      React.createElement('div', { className: 'st-drag-handle', onMouseDown: (e) => startDrag(e, side), style: { width: 4, cursor: 'col-resize', flexShrink: 0 } }),
       React.createElement('div', { 'data-slot': 'sidebar-right', style: { width: w, flexShrink: 0, overflow: 'auto', borderLeft: '1px solid #ccc' } },
         React.createElement('div', { style: { padding: '6px 8px', display: 'flex', justifyContent: 'flex-start' } },
           btn(React.createElement(IconDotPlus, null), () => setCollapsed(true), '收起侧边栏')),
-        React.createElement('div', { ref: slotRef('sidebar-right'), style: { padding: 8 } })),
-      React.createElement('div', { onMouseDown: (e) => startDrag(e, side), style: { width: 4, cursor: 'col-resize', flexShrink: 0 } }))
+        React.createElement('div', { ref: slotRef('sidebar-right'), style: { padding: 8 } })))
   }
 
   return React.createElement('div', { style: { display: 'flex', flexDirection: 'column', height: '100vh', fontFamily: 'system-ui', margin: 0, overflow: 'hidden' } },
