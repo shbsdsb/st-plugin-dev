@@ -8,7 +8,7 @@ export interface ThemeOptions {
   accent: string
   /** 背景渐变是否流动动画 */
   animated: boolean
-  /** 背景光球数量(0-3,nth-child 定位) */
+  /** 背景光球数量(0-3,data-index 属性选择器定位) */
   orbCount: number
 }
 
@@ -19,9 +19,14 @@ export const DEFAULT_THEME: ThemeOptions = {
   orbCount: 3,
 }
 
+/** 归一化光球数量:非有限数回退默认 3;否则 clamp 到 [0,3] 并向下取整(两处消费方共用) */
+export function normalizeOrbCount(value: number | undefined): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return DEFAULT_THEME.orbCount
+  return Math.max(0, Math.min(Math.floor(value), 3))
+}
+
 /** 光球定位:前 3 个位置(淡紫左上 / 淡蓝右下 / 淡粉中下);animated=false 时无动画 */
-function orbCss(index: number, animated: boolean): string {
-  const orbs = [
+function orbCss(index: number, animated: boolean): string {  const orbs = [
     `width: 420px; height: 420px; left: -80px; top: -60px; background: radial-gradient(circle, rgba(124, 109, 246, 0.35), transparent 70%);${animated ? ' animation: stBeautifyFloat1 14s ease-in-out infinite;' : ''}`,
     `width: 380px; height: 380px; right: -70px; bottom: -80px; background: radial-gradient(circle, rgba(56, 189, 248, 0.35), transparent 70%);${animated ? ' animation: stBeautifyFloat2 16s ease-in-out infinite;' : ''}`,
     `width: 260px; height: 260px; left: 45%; top: 55%; background: radial-gradient(circle, rgba(232, 121, 249, 0.22), transparent 70%);${animated ? ' animation: stBeautifyFloat1 20s ease-in-out infinite reverse;' : ''}`,
@@ -51,7 +56,9 @@ export function buildThemeCss(opts: ThemeOptions): string {
   0%, 100% { transform: translate(0, 0) scale(1); }
   50% { transform: translate(-36px, -24px) scale(1.06); }
 }` : ''
-  const orbs = Array.from({ length: Math.max(0, Math.min(opts.orbCount, 3)) }, (_, i) => orbCss(i, opts.animated)).join('\n')
+  const orbs = Array.from({ length: normalizeOrbCount(opts.orbCount) }, (_, i) => orbCss(i, opts.animated)).join('\n')
+
+  // accent 必须为 6 位 hex(如 #7c6df6);`26`/`47` 为 alpha 后缀(0.15/0.28),非 6 位 hex 会产生非法 CSS
 
   return `/* st-ui-beautify white glass theme */
 html, body { margin: 0; padding: 0; height: 100%; }

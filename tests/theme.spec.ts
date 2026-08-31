@@ -38,4 +38,27 @@ describe('buildThemeCss', () => {
     expect(buildThemeCss({ ...DEFAULT_THEME, orbCount: 0 })).not.toContain('st-beautify-orb[data-index=')
     expect(() => buildThemeCss({ ...DEFAULT_THEME, orbCount: -3 })).not.toThrow()
   })
+
+  it('orbCount NaN/undefined/小数归一化(回退默认或向下取整)', () => {
+    // NaN → 回退默认 3
+    const nanCss = buildThemeCss({ ...DEFAULT_THEME, orbCount: Number.NaN })
+    expect(nanCss).toContain('.st-beautify-orb[data-index="0"]')
+    expect(nanCss).toContain('.st-beautify-orb[data-index="2"]')
+    // undefined → 合并默认后为 3(此处显式传 undefined 语义同 NaN)
+    const undefCss = buildThemeCss({ ...DEFAULT_THEME, orbCount: undefined as unknown as number })
+    expect(undefCss).toContain('.st-beautify-orb[data-index="2"]')
+    // 小数 1.5 → 向下取整为 1
+    const fracCss = buildThemeCss({ ...DEFAULT_THEME, orbCount: 1.5 })
+    expect(fracCss).toContain('.st-beautify-orb[data-index="0"]')
+    expect(fracCss).not.toContain('.st-beautify-orb[data-index="1"]')
+  })
+
+  it('覆盖 inline 边框需 !important(玻璃/边框属性)', () => {
+    const css = buildThemeCss(DEFAULT_THEME)
+    expect(css).toContain('!important')
+    // 通用玻璃基元的关键属性都带 !important
+    expect(css).toContain('background: rgba(255, 255, 255, 0.58) !important')
+    expect(css).toContain('backdrop-filter: blur(20px) saturate(160%) !important')
+    expect(css).toContain('border: 1px solid rgba(255, 255, 255, 0.72) !important')
+  })
 })
