@@ -26,9 +26,10 @@ export default {
       style.id = STYLE_ID
       style.textContent = buildThemeCss(opts)
       document.head.appendChild(style)
-      for (let i = 0; i < Math.min(opts.orbCount, 3); i++) {
+      for (let i = 0; i < Math.max(0, Math.min(opts.orbCount, 3)); i++) {
         const orb = document.createElement('div')
         orb.className = 'st-beautify-orb'
+        orb.setAttribute('data-index', String(i))
         document.body.appendChild(orb)
       }
     } catch (e) {

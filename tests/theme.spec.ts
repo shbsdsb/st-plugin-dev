@@ -27,9 +27,15 @@ describe('buildThemeCss', () => {
     const css = buildThemeCss({ ...DEFAULT_THEME, blur: 8, accent: '#ff6600', orbCount: 2 })
     expect(css).toContain('blur(8px)')
     expect(css).toContain('#ff6600')
-    // orbCount=2 时只生成前 2 个光球定位
-    expect(css).toContain('.st-beautify-orb:nth-child(1)')
-    expect(css).toContain('.st-beautify-orb:nth-child(2)')
-    expect(css).not.toContain('.st-beautify-orb:nth-child(3)')
+    // orbCount=2 时只生成前 2 个光球定位(data-index 属性选择器,避免 nth-child 受宿主子元素影响)
+    expect(css).toContain('.st-beautify-orb[data-index="0"]')
+    expect(css).toContain('.st-beautify-orb[data-index="1"]')
+    expect(css).not.toContain('.st-beautify-orb[data-index="2"]')
+  })
+
+  it('orbCount 边界(0/负值不崩溃)', () => {
+    expect(() => buildThemeCss({ ...DEFAULT_THEME, orbCount: 0 })).not.toThrow()
+    expect(buildThemeCss({ ...DEFAULT_THEME, orbCount: 0 })).not.toContain('st-beautify-orb[data-index=')
+    expect(() => buildThemeCss({ ...DEFAULT_THEME, orbCount: -3 })).not.toThrow()
   })
 })

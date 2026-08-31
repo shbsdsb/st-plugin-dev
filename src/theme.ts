@@ -26,7 +26,7 @@ function orbCss(index: number, animated: boolean): string {
     `width: 380px; height: 380px; right: -70px; bottom: -80px; background: radial-gradient(circle, rgba(56, 189, 248, 0.35), transparent 70%);${animated ? ' animation: stBeautifyFloat2 16s ease-in-out infinite;' : ''}`,
     `width: 260px; height: 260px; left: 45%; top: 55%; background: radial-gradient(circle, rgba(232, 121, 249, 0.22), transparent 70%);${animated ? ' animation: stBeautifyFloat1 20s ease-in-out infinite reverse;' : ''}`,
   ]
-  return `.st-beautify-orb:nth-child(${index + 1}) { position: fixed; border-radius: 50%; filter: blur(100px); pointer-events: none; z-index: 0; ${orbs[index] ?? orbs[0]} }`
+  return `.st-beautify-orb[data-index="${index}"] { position: fixed; border-radius: 50%; filter: blur(100px); pointer-events: none; z-index: 0; ${orbs[index] ?? orbs[0]} }`
 }
 
 /** 生成主题 CSS;参数插值,含背景/玻璃基元/data-slot 覆盖/控件/光球 */
@@ -51,7 +51,7 @@ export function buildThemeCss(opts: ThemeOptions): string {
   0%, 100% { transform: translate(0, 0) scale(1); }
   50% { transform: translate(-36px, -24px) scale(1.06); }
 }` : ''
-  const orbs = Array.from({ length: Math.min(opts.orbCount, 3) }, (_, i) => orbCss(i, opts.animated)).join('\n')
+  const orbs = Array.from({ length: Math.max(0, Math.min(opts.orbCount, 3)) }, (_, i) => orbCss(i, opts.animated)).join('\n')
 
   return `/* st-ui-beautify white glass theme */
 html, body { margin: 0; padding: 0; height: 100%; }
