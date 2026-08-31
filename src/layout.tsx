@@ -1,10 +1,31 @@
 // agent_plugin_dev/st-ui-slots/src/layout.tsx
-// 布局纯结构:无示例颜色/文字(具体 UI 由其他插件经插槽填充);保留尺寸/拖拽/收起/悬浮拖拽交互
+// 布局纯结构:无示例颜色/文字(具体 UI 由其他插件经插槽填充);保留尺寸/拖拽/收起/悬浮拖拽交互。
+// 收放行为(功能边界):
+//   - 左栏收起:保留 40px 窄条(data-slot 保留,美化不消失),展开按钮在窄条内;
+//   - 右栏收起:完全收起(不渲染),展开按钮移动到 main 插槽右上角;展开时按钮回到右栏顶部。
+// 按钮外观(.st-slot-btn 玻璃美化)由美化插件(st-ui-beautify)提供,本层只提供结构与图标。
 import React from 'react'
 import { SLOT_NAMES, type SlotName, type SlotRegistry } from './slots.ts'
 
 const NAV_H = 48
 const SIDEBAR_W = 240
+const COLLAPSED_LEFT_W = 40
+
+/** 13 号图标:圆点 + V 形(左侧收放) */
+function IconDotChevron({ dir }: { dir: 'left' | 'right' }): React.ReactElement {
+  return React.createElement('svg',
+    { viewBox: '0 0 24 24', width: 20, height: 20, fill: 'none', stroke: 'currentColor', strokeWidth: 2.2, strokeLinecap: 'round', strokeLinejoin: 'round' },
+    React.createElement('circle', { cx: 12, cy: 12, r: 2, fill: 'currentColor', stroke: 'none' }),
+    React.createElement('path', { d: dir === 'right' ? 'M14 9l3 3-3 3' : 'M10 9l-3 3 3 3' }))
+}
+
+/** 14 号图标:圆点 + 十字(右侧收放) */
+function IconDotPlus(): React.ReactElement {
+  return React.createElement('svg',
+    { viewBox: '0 0 24 24', width: 20, height: 20, fill: 'none', stroke: 'currentColor', strokeWidth: 2.2, strokeLinecap: 'round', strokeLinejoin: 'round' },
+    React.createElement('circle', { cx: 12, cy: 12, r: 2, fill: 'currentColor', stroke: 'none' }),
+    React.createElement('path', { d: 'M12 9v6M9 12h6' }))
+}
 
 export function Layout(props: { registry: SlotRegistry }): React.ReactElement {
   const { registry } = props
@@ -85,23 +106,35 @@ export function Layout(props: { registry: SlotRegistry }): React.ReactElement {
     document.addEventListener('mouseup', up)
   }
 
-  const btn = (label: string, onClick: () => void) =>
-    React.createElement('button', { onClick, style: { cursor: 'pointer', fontSize: 14, padding: '4px 8px', borderRadius: 8 } }, label)
+  // 收放按钮:结构 + 图标(className .st-slot-btn 交由美化插件提供玻璃样式)
+  const btn = (icon: React.ReactElement, onClick: () => void, title: string) =>
+    React.createElement('button',
+      { className: 'st-slot-btn', onClick, title, style: { width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0, cursor: 'pointer' } },
+      icon)
 
-  const sidebar = (side: 'left' | 'right', w: number, collapsed: boolean, setCollapsed: (v: boolean) => void) =>
-    collapsed
-      ? React.createElement('div', { style: { width: 32, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', paddingTop: 8 } },
-          btn(side === 'left' ? '»' : '«', () => setCollapsed(false)))
-      : React.createElement(React.Fragment, null,
-          side === 'left' && React.createElement('div', { 'data-slot': 'sidebar-left', style: { width: w, overflow: 'auto', display: 'flex', flexDirection: 'column', borderRight: '1px solid #ccc' } },
-            React.createElement('div', { style: { padding: '6px 10px', display: 'flex', justifyContent: 'flex-end' } },
-              btn('«', () => setCollapsed(true))),
-            React.createElement('div', { ref: slotRef('sidebar-left'), style: { flex: 1, padding: 8 } })),
-          React.createElement('div', { onMouseDown: (e) => startDrag(e, side), style: { width: 4, cursor: 'col-resize', flexShrink: 0 } }),
-          side === 'right' && React.createElement('div', { 'data-slot': 'sidebar-right', style: { width: w, overflow: 'auto', borderLeft: '1px solid #ccc' } },
-            React.createElement('div', { style: { padding: '6px 10px', display: 'flex', justifyContent: 'flex-start' } },
-              btn('»', () => setCollapsed(true))),
-            React.createElement('div', { ref: slotRef('sidebar-right'), style: { padding: 8 } })))
+  const sidebar = (side: 'left' | 'right', w: number, collapsed: boolean, setCollapsed: (v: boolean) => void) => {
+    if (side === 'left') {
+      if (collapsed) {
+        // 左栏收起:保留 40px 窄条(data-slot 保留,玻璃美化不消失),13 号展开按钮(V 朝右)
+        return React.createElement('div', { 'data-slot': 'sidebar-left', style: { width: COLLAPSED_LEFT_W, flexShrink: 0, display: 'flex', justifyContent: 'center', paddingTop: 8 } },
+          btn(React.createElement(IconDotChevron, { dir: 'right' }), () => setCollapsed(false), '展开侧边栏'))
+      }
+      return React.createElement(React.Fragment, null,
+        React.createElement('div', { 'data-slot': 'sidebar-left', style: { width: w, flexShrink: 0, overflow: 'auto', display: 'flex', flexDirection: 'column', borderRight: '1px solid #ccc' } },
+          React.createElement('div', { style: { padding: '6px 8px', display: 'flex', justifyContent: 'flex-end' } },
+            btn(React.createElement(IconDotChevron, { dir: 'left' }), () => setCollapsed(true), '收起侧边栏')),
+          React.createElement('div', { ref: slotRef('sidebar-left'), style: { flex: 1, padding: 8 } })),
+        React.createElement('div', { onMouseDown: (e) => startDrag(e, side), style: { width: 4, cursor: 'col-resize', flexShrink: 0 } }))
+    }
+    // right:完全收起(不渲染;展开按钮在 main 右上角)
+    if (collapsed) return null
+    return React.createElement(React.Fragment, null,
+      React.createElement('div', { 'data-slot': 'sidebar-right', style: { width: w, flexShrink: 0, overflow: 'auto', borderLeft: '1px solid #ccc' } },
+        React.createElement('div', { style: { padding: '6px 8px', display: 'flex', justifyContent: 'flex-start' } },
+          btn(React.createElement(IconDotPlus, null), () => setCollapsed(true), '收起侧边栏')),
+        React.createElement('div', { ref: slotRef('sidebar-right'), style: { padding: 8 } })),
+      React.createElement('div', { onMouseDown: (e) => startDrag(e, side), style: { width: 4, cursor: 'col-resize', flexShrink: 0 } }))
+  }
 
   return React.createElement('div', { style: { display: 'flex', flexDirection: 'column', height: '100vh', fontFamily: 'system-ui', margin: 0, overflow: 'hidden' } },
     // 顶部导航栏(纯结构,UI 由 nav 插槽插件填充)
@@ -111,8 +144,11 @@ export function Layout(props: { registry: SlotRegistry }): React.ReactElement {
     React.createElement('div', { style: { display: 'flex', flex: 1, minHeight: 0 } },
       React.createElement('div', { style: { display: 'flex', flexShrink: 0 } },
         sidebar('left', leftW, leftCollapsed, setLeftCollapsed)),
-      React.createElement('div', { 'data-slot': 'main', style: { flex: 1, overflow: 'auto', padding: 8 } },
-        React.createElement('div', { ref: slotRef('main') })),
+      React.createElement('div', { 'data-slot': 'main', style: { flex: 1, minWidth: 0, overflow: 'auto', padding: 8, position: 'relative' } },
+        React.createElement('div', { ref: slotRef('main') }),
+        // 右栏收起时:展开按钮浮动到 main 右上角(14 号)
+        rightCollapsed && React.createElement('div', { style: { position: 'absolute', top: 8, right: 8, zIndex: 900 } },
+          btn(React.createElement(IconDotPlus, null), () => setRightCollapsed(false), '展开右侧栏'))),
       React.createElement('div', { style: { display: 'flex', flexShrink: 0 } },
         sidebar('right', rightW, rightCollapsed, setRightCollapsed))),
     // 悬浮层(纯结构,可拖拽 + 关闭;UI 由 overlay 插槽插件填充)
