@@ -41,7 +41,8 @@ describe('renderShellPage', () => {
   it('入口挂载后遍历 CLIENT_BOOT 挂载其余辅助插件(mount 校验)', () => {
     const html = renderShellPage(service, boot)
     expect(html).toContain('for (const entry of window.CLIENT_BOOT)')
-    expect(html).toContain('entry.id === entryUrl')
+    // 入口跳过需兼容 id 与 url 两种 entryUrl 形态(entryUrl 可能来自 defaultPlugin 的 url 配置)
+    expect(html).toContain('entry.id === entryUrl || entry.url === entryUrl')
     expect(html).toContain('__ModuleLoader__.require(entry.id)')
     expect(html).toContain("typeof aux.mount === 'function'")
     expect(html).toContain('mounted auxiliary')
