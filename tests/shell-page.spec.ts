@@ -51,4 +51,9 @@ describe('renderShellPage', () => {
     expect(html).toContain('id="shell-error"')
     expect(html).toContain('id="shell-root"')
   })
+
+  it('HTML 声明空 favicon(避免 /favicon.ico 404)', () => {
+    const html = renderShellPage(service, boot)
+    expect(html).toContain('<link rel="icon" href="data:,">')
+  })
 })

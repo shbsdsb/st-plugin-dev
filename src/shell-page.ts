@@ -11,6 +11,7 @@ export function renderShellPage(service: WebModuleService, boot: ClientBootEntry
 <head>
 <meta charset="utf-8">
 <title>Web Shell</title>
+<link rel="icon" href="data:,">
 <style>
   html, body { margin: 0; padding: 0; height: 100%; }
   body { font-family: system-ui, sans-serif; background: #f6f7f9; }
