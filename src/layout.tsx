@@ -13,7 +13,7 @@ export function Layout(props: { registry: SlotRegistry }): React.ReactElement {
   const [leftCollapsed, setLeftCollapsed] = React.useState(false)
   const [rightCollapsed, setRightCollapsed] = React.useState(false)
   const [overlayPos, setOverlayPos] = React.useState({ x: 20, y: 60 })
-  const [overlayVisible, setOverlayVisible] = React.useState(true)
+  const [overlayVisible, setOverlayVisible] = React.useState(false)
   const containers = React.useRef<Partial<Record<SlotName, HTMLDivElement | null>>>({})
   // 注册表修订计数:subscribe 通知时自增,触发 React 重渲染使新内容即时反映
   const [, setRevision] = React.useState(0)
@@ -86,11 +86,11 @@ export function Layout(props: { registry: SlotRegistry }): React.ReactElement {
   }
 
   const btn = (label: string, onClick: () => void) =>
-    React.createElement('button', { onClick, style: { border: 'none', background: 'none', cursor: 'pointer', fontSize: 12, padding: 2 } }, label)
+    React.createElement('button', { onClick, style: { cursor: 'pointer', fontSize: 14, padding: '4px 8px', borderRadius: 8 } }, label)
 
   const sidebar = (side: 'left' | 'right', w: number, collapsed: boolean, setCollapsed: (v: boolean) => void) =>
     collapsed
-      ? React.createElement('div', { style: { width: 24, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', paddingTop: 8 } },
+      ? React.createElement('div', { style: { width: 32, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', paddingTop: 8 } },
           btn(side === 'left' ? '»' : '«', () => setCollapsed(false)))
       : React.createElement(React.Fragment, null,
           side === 'left' && React.createElement('div', { 'data-slot': 'sidebar-left', style: { width: w, overflow: 'auto', display: 'flex', flexDirection: 'column', borderRight: '1px solid #ccc' } },
