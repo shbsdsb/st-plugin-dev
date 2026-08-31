@@ -47,6 +47,15 @@ async function load(entryUrl) {
     }
     await plugin.mount(root)
     console.log('[web-module] loaded:', plugin.name || entryUrl)
+    // 挂载其余 boot 插件(辅助插件:页面级视觉/脚本插件;mount 忽略 root 或自行处理容器)
+    for (const entry of window.CLIENT_BOOT) {
+      if (entry.url === entryUrl) continue
+      const aux = window.__ModuleLoader__.require(entry.url)
+      if (aux && typeof aux.mount === 'function') {
+        await aux.mount(root)
+        console.log('[web-module] mounted auxiliary:', aux.name || entry.url)
+      }
+    }
   } catch (e) {
     showError('插件加载失败: ' + (e && e.message ? e.message : e))
     console.error('[web-module] load failed:', e)

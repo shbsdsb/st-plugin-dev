@@ -38,6 +38,14 @@ describe('renderShellPage', () => {
     expect(html).toContain('id="shell-root"')
   })
 
+  it('入口挂载后遍历 CLIENT_BOOT 挂载其余辅助插件(mount 校验)', () => {
+    const html = renderShellPage(service, boot)
+    expect(html).toContain('for (const entry of window.CLIENT_BOOT)')
+    expect(html).toContain('entry.url === entryUrl')
+    expect(html).toContain("typeof aux.mount === 'function'")
+    expect(html).toContain('mounted auxiliary')
+  })
+
   it('HTML 含错误展示容器与挂载根节点', () => {
     const html = renderShellPage(service, boot)
     expect(html).toContain('id="shell-error"')
