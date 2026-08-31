@@ -56,9 +56,9 @@ describe('buildThemeCss', () => {
   it('覆盖 inline 边框需 !important(玻璃/边框属性)', () => {
     const css = buildThemeCss(DEFAULT_THEME)
     expect(css).toContain('!important')
-    // 通用玻璃基元的关键属性都带 !important
+    // 通用玻璃基元的关键属性都带 !important(边框为灰蓝半透明,白色玻璃区域间可见)
     expect(css).toContain('background: rgba(255, 255, 255, 0.58) !important')
     expect(css).toContain('backdrop-filter: blur(20px) saturate(160%) !important')
-    expect(css).toContain('border: 1px solid rgba(255, 255, 255, 0.72) !important')
+    expect(css).toContain('border: 1px solid rgba(148, 163, 184, 0.45) !important')
   })
 })

@@ -69,19 +69,19 @@ body {
   ${backgroundAnim}
 }
 ${keyframes}
-/* ===== 玻璃基元:5 插槽容器统一玻璃化 ===== */
+/* ===== 玻璃基元:5 插槽容器统一玻璃化(边框用灰蓝半透明,白色玻璃区域间边界可见) ===== */
 [data-slot] {
   background: rgba(255, 255, 255, 0.58) !important;
   -webkit-backdrop-filter: blur(${blur}px) saturate(160%) !important;
   backdrop-filter: blur(${blur}px) saturate(160%) !important;
-  border: 1px solid rgba(255, 255, 255, 0.72) !important;
+  border: 1px solid rgba(148, 163, 184, 0.45) !important;
   border-radius: 14px !important;
   box-shadow: 0 8px 32px rgba(31, 38, 135, 0.10), inset 0 1px 0 rgba(255, 255, 255, 0.85) !important;
 }
 /* nav:取消示例边框,玻璃条;贴顶、左右不留,仅下侧圆角 + 与下方内容空隙 */
 [data-slot="nav"] {
   border: none !important;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.5) !important;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.4) !important;
   border-radius: 0 0 14px 14px !important;
   margin: 0 0 12px !important;
 }
