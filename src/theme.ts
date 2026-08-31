@@ -111,19 +111,15 @@ body button:active { transform: scale(0.96); }
 /* ===== 插槽收放按钮(.st-slot-btn:结构/图标由 st-ui-slots 提供,美化在此) ===== */
 .st-slot-btn {
   border-radius: 50% !important;
-  background: rgba(255, 255, 255, 0.55) !important;
-  -webkit-backdrop-filter: blur(16px) saturate(160%);
-  backdrop-filter: blur(16px) saturate(160%);
-  border: 1px solid rgba(255, 255, 255, 0.8) !important;
-  color: #6d28d9 !important;
-  box-shadow: 0 4px 14px rgba(31, 38, 135, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  background: linear-gradient(135deg, #7c3aed, #38bdf8) !important;
+  border: none !important;
+  color: #fff !important;
+  box-shadow: 0 4px 14px rgba(124, 58, 237, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.25);
   transition: all .2s ease;
 }
 .st-slot-btn:hover {
-  background: #7c3aed !important;
-  border-color: #7c3aed !important;
-  color: #fff !important;
-  box-shadow: 0 8px 22px rgba(124, 58, 237, 0.45);
+  background: linear-gradient(135deg, #8b5cf6, #4cc3fa) !important;
+  box-shadow: 0 8px 22px rgba(124, 58, 237, 0.5);
   transform: translateY(-2px);
 }
 .st-slot-btn svg { width: 20px; height: 20px; }
