@@ -93,30 +93,31 @@ export function Layout(props: { registry: SlotRegistry }): React.ReactElement {
       ? React.createElement('div', { style: { width: 24, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', paddingTop: 8 } },
           btn(side === 'left' ? '»' : '«', () => setCollapsed(false)))
       : React.createElement(React.Fragment, null,
-          side === 'left' && React.createElement('div', { style: { width: w, overflow: 'auto', display: 'flex', flexDirection: 'column', borderRight: '1px solid #ccc' } },
+          side === 'left' && React.createElement('div', { 'data-slot': 'sidebar-left', style: { width: w, overflow: 'auto', display: 'flex', flexDirection: 'column', borderRight: '1px solid #ccc' } },
             React.createElement('div', { style: { padding: '6px 10px', display: 'flex', justifyContent: 'flex-end' } },
               btn('«', () => setCollapsed(true))),
             React.createElement('div', { ref: slotRef('sidebar-left'), style: { flex: 1, padding: 8 } })),
           React.createElement('div', { onMouseDown: (e) => startDrag(e, side), style: { width: 4, cursor: 'col-resize', flexShrink: 0 } }),
-          side === 'right' && React.createElement('div', { style: { width: w, overflow: 'auto', borderLeft: '1px solid #ccc' } },
+          side === 'right' && React.createElement('div', { 'data-slot': 'sidebar-right', style: { width: w, overflow: 'auto', borderLeft: '1px solid #ccc' } },
             React.createElement('div', { style: { padding: '6px 10px', display: 'flex', justifyContent: 'flex-start' } },
               btn('»', () => setCollapsed(true))),
             React.createElement('div', { ref: slotRef('sidebar-right'), style: { padding: 8 } })))
 
   return React.createElement('div', { style: { display: 'flex', flexDirection: 'column', height: '100vh', fontFamily: 'system-ui', margin: 0, overflow: 'hidden' } },
     // 顶部导航栏(纯结构,UI 由 nav 插槽插件填充)
-    React.createElement('div', { style: { height: NAV_H, display: 'flex', alignItems: 'center', padding: '0 8px', flexShrink: 0, borderBottom: '1px solid #ccc' } },
+    React.createElement('div', { 'data-slot': 'nav', style: { height: NAV_H, display: 'flex', alignItems: 'center', padding: '0 8px', flexShrink: 0, borderBottom: '1px solid #ccc' } },
       React.createElement('div', { ref: slotRef('nav'), style: { flex: 1 } })),
     // 中部:左右侧边栏 + 主页面
     React.createElement('div', { style: { display: 'flex', flex: 1, minHeight: 0 } },
       React.createElement('div', { style: { display: 'flex', flexShrink: 0 } },
         sidebar('left', leftW, leftCollapsed, setLeftCollapsed)),
-      React.createElement('div', { style: { flex: 1, overflow: 'auto', padding: 8 } },
+      React.createElement('div', { 'data-slot': 'main', style: { flex: 1, overflow: 'auto', padding: 8 } },
         React.createElement('div', { ref: slotRef('main') })),
       React.createElement('div', { style: { display: 'flex', flexShrink: 0 } },
         sidebar('right', rightW, rightCollapsed, setRightCollapsed))),
     // 悬浮层(纯结构,可拖拽 + 关闭;UI 由 overlay 插槽插件填充)
     overlayVisible && React.createElement('div', {
+      'data-slot': 'overlay',
       onMouseDown: startOverlayDrag,
       style: { position: 'fixed', left: overlayPos.x, top: overlayPos.y, width: 240, height: 160, border: '1px solid #999', borderRadius: 6, cursor: 'move', zIndex: 1000, display: 'flex', flexDirection: 'column' },
     },
