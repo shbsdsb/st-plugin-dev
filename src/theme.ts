@@ -26,7 +26,8 @@ export function normalizeOrbCount(value: number | undefined): number {
 }
 
 /** 光球定位:前 3 个位置(淡紫左上 / 淡蓝右下 / 淡粉中下);animated=false 时无动画 */
-function orbCss(index: number, animated: boolean): string {  const orbs = [
+function orbCss(index: number, animated: boolean): string {
+  const orbs = [
     `width: 420px; height: 420px; left: -80px; top: -60px; background: radial-gradient(circle, rgba(124, 109, 246, 0.35), transparent 70%);${animated ? ' animation: stBeautifyFloat1 14s ease-in-out infinite;' : ''}`,
     `width: 380px; height: 380px; right: -70px; bottom: -80px; background: radial-gradient(circle, rgba(56, 189, 248, 0.35), transparent 70%);${animated ? ' animation: stBeautifyFloat2 16s ease-in-out infinite;' : ''}`,
     `width: 260px; height: 260px; left: 45%; top: 55%; background: radial-gradient(circle, rgba(232, 121, 249, 0.22), transparent 70%);${animated ? ' animation: stBeautifyFloat1 20s ease-in-out infinite reverse;' : ''}`,
