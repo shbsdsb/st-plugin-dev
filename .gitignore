@@ -1,0 +1,13 @@
+/*
+!/.gitignore
+!/package.json
+!/pnpm-lock.yaml
+!/cordis.patch.yml
+!/tsconfig.json
+!/vitest.config.ts
+!/src/
+!/tests/
+!/lib/
+!/src/**
+!/tests/**
+!/lib/**

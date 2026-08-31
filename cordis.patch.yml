@@ -1,0 +1,4 @@
+# st-ui-beautify bundle patch(insert 语法声明条目)
+- insert:
+  - name: st-ui-beautify
+    id: st-ui-beautify
