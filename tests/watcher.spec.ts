@@ -46,4 +46,22 @@ describe('createWatcher', () => {
     expect(onPatchChange).toHaveBeenCalledTimes(1)
     dispose()
   })
+
+  it('patch 文件运行中首次创建 → onPatchChange(从无到有视为变化)', async () => {
+    const dir = mkdtempSync(resolve(tmpdir(), 'hr-watch-'))
+    dirs.push(dir)
+    const lockPath = join(dir, 'pnpm-lock.yaml')
+    const patchPath = join(dir, 'cordis.patch.yml')
+    writeFileSync(lockPath, 'lock: 1\n')
+    // patch 文件初始化时不存在
+    const onChange = vi.fn()
+    const onPatchChange = vi.fn()
+    const dispose = createWatcher({ lockPath, patchPaths: [patchPath], interval: 50, onChange, onPatchChange })
+    await new Promise((r) => setTimeout(r, 80))
+    expect(onPatchChange).not.toHaveBeenCalled()
+    writeFileSync(patchPath, '- id: a\n')
+    await new Promise((r) => setTimeout(r, 80))
+    expect(onPatchChange).toHaveBeenCalledTimes(1)
+    dispose()
+  })
 })
