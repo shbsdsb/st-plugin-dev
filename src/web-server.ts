@@ -1,5 +1,6 @@
 // agent_plugin_dev/host-plugin/src/web-server.ts
-import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
+import { createServer, type Server, type IncomingMessage, type ServerResponse } from 'node:http'
+import { ipInWhitelist } from './config.ts'
 
 export type RouteHandler = (req: IncomingMessage, res: ServerResponse) => void | Promise<void>
 
@@ -22,7 +23,11 @@ interface Entry {
 export class WebServerService {
   private entries: Entry[] = []
   private fallbackHandler: RouteHandler | null = null
-  private _server = createServer((req, res) => void this.dispatch(req, res))
+  private _server: Server
+
+  constructor(public whitelist: string[] = []) {
+    this._server = createServer((req, res) => void this.dispatch(req, res))
+  }
 
   get server() {
     return this._server
@@ -64,6 +69,15 @@ export class WebServerService {
   }
 
   async dispatch(req: IncomingMessage, res: ServerResponse): Promise<void> {
+    // 来源 IP 白名单过滤(whitelist 非空时启用;精确 IP 或 CIDR 匹配,不匹配返回 403)
+    if (this.whitelist.length > 0) {
+      const remote = req.socket.remoteAddress ?? ''
+      if (!ipInWhitelist(remote, this.whitelist)) {
+        res.writeHead(403, { 'content-type': 'text/plain' })
+        res.end('403 Forbidden')
+        return
+      }
+    }
     let pathname: string
     try {
       pathname = new URL(req.url ?? '/', 'http://localhost').pathname

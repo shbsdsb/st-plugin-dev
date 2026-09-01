@@ -210,3 +210,28 @@ describe('WebServerService 分发(exact / 最长 prefix / fallback)', () => {
     }
   })
 })
+
+describe('WebServerService 来源白名单过滤', () => {
+  it('命中白名单(精确/CIDR)放行;未命中 403;空 whitelist 放行', async () => {
+    // CIDR 命中(127.0.0.0/8 覆盖 127.0.0.1)
+    let ws = new WebServerService(['127.0.0.0/8'])
+    ws.register({ kind: 'exact', path: '/ok', handler: (_q, r) => { r.writeHead(200); r.end('ok') } })
+    let url = await startOnEphemeralPort(ws)
+    expect((await fetch(url + '/ok')).status).toBe(200)
+    await ws.stop()
+
+    // 未命中 → 403
+    ws = new WebServerService(['10.0.0.1'])
+    ws.register({ kind: 'exact', path: '/ok', handler: (_q, r) => { r.writeHead(200); r.end('ok') } })
+    url = await startOnEphemeralPort(ws)
+    expect((await fetch(url + '/ok')).status).toBe(403)
+    await ws.stop()
+
+    // 空 whitelist → 放行
+    ws = new WebServerService([])
+    ws.register({ kind: 'exact', path: '/ok', handler: (_q, r) => { r.writeHead(200); r.end('ok') } })
+    url = await startOnEphemeralPort(ws)
+    expect((await fetch(url + '/ok')).status).toBe(200)
+    await ws.stop()
+  })
+})

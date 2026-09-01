@@ -1,6 +1,6 @@
 // agent_plugin_dev/host-plugin/tests/config.spec.ts(替换 loadConfig 用例)
 import { describe, expect, it } from 'vitest'
-import { HostConfigSchema, DEFAULT_CONFIG, normalizeConfig, resolveListenTarget, type HostConfig } from '../src/config.ts'
+import { HostConfigSchema, DEFAULT_CONFIG, normalizeConfig, resolveListenTarget, ipInWhitelist, parseCIDR, ipv4ToInt, type HostConfig } from '../src/config.ts'
 
 function validate(raw: unknown): HostConfig {
   return (HostConfigSchema['~standard'].validate(raw) as { value: HostConfig }).value
@@ -39,5 +39,30 @@ describe('normalizeConfig/resolveListenTarget', () => {
     expect(resolveListenTarget({ ...DEFAULT_CONFIG, listen: false })).toBe('127.0.0.1')
     expect(resolveListenTarget({ ...DEFAULT_CONFIG, listen: true, listenWhitelist: ['10.0.0.1'] })).toBe('10.0.0.1')
     expect(resolveListenTarget({ ...DEFAULT_CONFIG, listen: true })).toBe('0.0.0.0')
+  })
+
+  it('resolveListenTarget 跳过 CIDR 项:首个非 CIDR IP 作绑定,全 CIDR → 0.0.0.0', () => {
+    expect(resolveListenTarget({ ...DEFAULT_CONFIG, listen: true, listenWhitelist: ['192.168.1.0/24', '10.0.0.1'] })).toBe('10.0.0.1')
+    expect(resolveListenTarget({ ...DEFAULT_CONFIG, listen: true, listenWhitelist: ['192.168.1.0/24'] })).toBe('0.0.0.0')
+  })
+})
+
+describe('CIDR 来源白名单', () => {
+  it('ipv4ToInt/parseCIDR 解析', () => {
+    expect(ipv4ToInt('192.168.1.1')).toBe(0xc0a80101)
+    expect(ipv4ToInt('999.1.1.1')).toBeNull()
+    expect(ipv4ToInt('127.0.0.1')).toBe(0x7f000001)
+    expect(parseCIDR('192.168.1.0/24')).toEqual({ base: 0xc0a80100, prefix: 24 })
+    expect(parseCIDR('127.0.0.1')).toBeNull()
+    expect(parseCIDR('1.2.3.4/33')).toBeNull()
+  })
+
+  it('ipInWhitelist:精确 IP / CIDR / ::ffff: 前缀匹配', () => {
+    expect(ipInWhitelist('10.0.0.1', ['10.0.0.1'])).toBe(true)
+    expect(ipInWhitelist('10.0.0.2', ['10.0.0.1'])).toBe(false)
+    expect(ipInWhitelist('192.168.1.55', ['192.168.1.0/24'])).toBe(true)
+    expect(ipInWhitelist('192.168.2.55', ['192.168.1.0/24'])).toBe(false)
+    expect(ipInWhitelist('::ffff:10.0.0.1', ['10.0.0.1'])).toBe(true)
+    expect(ipInWhitelist('10.0.0.1', [])).toBe(false)
   })
 })

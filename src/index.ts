@@ -17,7 +17,7 @@ export function apply(ctx: Context, config: HostConfig) {
   // config 来自覆盖层 patch(经 HostConfigSchema 校验 + 默认值),不再旁路读文件
   ctx.provide('host', { config })
 
-  const webserver = new WebServerService()
+  const webserver = new WebServerService(config.listenWhitelist)
   ctx.provide('webServer', webserver)
   ctx.effect(() => async () => {
     await webserver.stop()
