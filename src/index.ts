@@ -76,6 +76,10 @@ export function apply(ctx: Context) {
         let payload: { entries?: unknown }
         try {
           payload = JSON.parse(body) as { entries?: unknown }
+          if (payload === null || typeof payload !== 'object' || Array.isArray(payload)) {
+            json(res, 400, { ok: false, error: '请求体必须为 JSON 对象' })
+            return
+          }
         } catch {
           json(res, 400, { ok: false, error: '请求体不是合法 JSON' })
           return
