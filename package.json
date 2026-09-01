@@ -1,9 +1,9 @@
 {
-  "name": "st-ui-beautify",
+  "name": "ui-tool-plugin",
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "前端美化插件:白色玻璃拟态主题(背景 + 5 插槽容器玻璃化)",
+  "description": "UI 工具库插件:白色玻璃主题(背景 + 插槽美化)+ window.__uiTools__ 前端工具库(13 种悬浮工具)+ theme 主题引擎(小参数 API + install 全量 css/html/js 替换)",
   "main": "lib/index.js",
   "scripts": {
     "build": "tsc -p tsconfig.json && node ../../agent_plugin_feat/bootstrap/src/cli/index.ts web-build --cwd .",

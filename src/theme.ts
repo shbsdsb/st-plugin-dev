@@ -1,4 +1,4 @@
-// agent_plugin_dev/st-ui-beautify/src/theme.ts
+// agent_plugin_dev/ui-tool-plugin/src/theme.ts
 // 白色玻璃拟态主题:CSS 模板字符串 + 参数化生成。视觉源自已确认的 HTML 原型
 // (agent_plugin_feat/.superpowers/sdd/glass-theme-demo.html),选择器改为 st-ui-slots 的 data-slot。
 export interface ThemeOptions {
@@ -61,7 +61,7 @@ export function buildThemeCss(opts: ThemeOptions): string {
 
   // accent 必须为 6 位 hex(如 #7c6df6);`26`/`47` 为 alpha 后缀(0.15/0.28),非 6 位 hex 会产生非法 CSS
 
-  return `/* st-ui-beautify white glass theme */
+  return `/* ui-tool-plugin white glass theme */
 html, body { margin: 0; padding: 0; height: 100%; }
 body {
   font-family: system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;

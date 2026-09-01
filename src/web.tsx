@@ -1,4 +1,4 @@
-// agent_plugin_dev/st-ui-beautify/src/web.tsx
+// agent_plugin_dev/ui-tool-plugin/src/web.tsx
 // WebPlugin:注入白色玻璃拟态主题样式 + 背景光球;unmount 全部移除(幂等)。
 // 无配置覆盖点:参数用内置默认(DEFAULT_THEME);mount 时自检测宿主
 // (st-ui-slots 公共接口 __uiSlots__ 或已渲染的 data-slot 容器),宿主缺失仅告警不阻塞。
@@ -19,14 +19,14 @@ function detectHost(): boolean {
 }
 
 export default {
-  name: 'st-ui-beautify',
+  name: 'ui-tool-plugin',
   mount(_el: HTMLElement) {
     try {
       // 幂等:先清旧注入
       removeInjected()
       const opts = DEFAULT_THEME
       if (!detectHost()) {
-        console.warn('[st-ui-beautify] 未检测到 st-ui-slots 宿主插槽,插槽主题不可见(背景主题仍注入)')
+        console.warn('[ui-tool-plugin] 未检测到 st-ui-slots 宿主插槽,插槽主题不可见(背景主题仍注入)')
       }
       const style = document.createElement('style')
       style.id = STYLE_ID
@@ -39,7 +39,7 @@ export default {
         document.body.appendChild(orb)
       }
     } catch (e) {
-      console.error('[st-ui-beautify] mount failed:', e)
+      console.error('[ui-tool-plugin] mount failed:', e)
     }
   },
   unmount() {
