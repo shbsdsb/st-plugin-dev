@@ -14,6 +14,8 @@ export interface ThemeEngine {
   set(patch: Partial<ThemeOptions>): void
   reset(): void
   install(opts: { css: string; html?: string; js?: string }): void
+  /** 卸载全部注入(内置主题 + install 残留),供插件 unmount 清场 */
+  destroy(): void
 }
 
 function removeThemeInjected(): void {
@@ -44,6 +46,8 @@ function removeInstalled(): void {
 
 export function createThemeEngine(): ThemeEngine {
   let current: ThemeOptions = { ...DEFAULT_THEME }
+  // 构造即注入默认白色玻璃主题
+  applyTheme(current)
 
   return {
     get() { return { ...current } },
@@ -76,6 +80,10 @@ export function createThemeEngine(): ThemeEngine {
         sc.textContent = js
         document.body.appendChild(sc)
       }
+    },
+    destroy() {
+      removeInstalled()
+      removeThemeInjected()
     },
   }
 }

@@ -1,17 +1,14 @@
 // agent_plugin_dev/ui-tool-plugin/src/web.tsx
-// WebPlugin:注入白色玻璃拟态主题样式 + 背景光球;unmount 全部移除(幂等)。
-// 无配置覆盖点:参数用内置默认(DEFAULT_THEME);mount 时自检测宿主
-// (st-ui-slots 公共接口 __uiSlots__ 或已渲染的 data-slot 容器),宿主缺失仅告警不阻塞。
-import { buildThemeCss, DEFAULT_THEME, normalizeOrbCount } from './theme.ts'
+// WebPlugin:挂载 window.__uiTools__(13 种玻璃拟态工具 + theme 主题引擎);
+// mount 经 theme-engine 注入内置白色玻璃主题;unmount 清场(关闭浮层 + 卸载主题 + 删除 API)。
+import { createTools, closeAllTools, type Tools } from './tools.ts'
+import { createThemeEngine, type ThemeEngine } from './theme-engine.ts'
 
-const STYLE_ID = 'st-beautify-theme'
-
-function removeInjected(): void {
-  document.getElementById(STYLE_ID)?.remove()
-  document.querySelectorAll('.st-beautify-orb').forEach((el) => el.remove())
+export interface UiTools extends Tools {
+  theme: ThemeEngine
 }
 
-/** 自检测宿主是否就绪:st-ui-slots 公共接口(__uiSlots__)或已渲染的 data-slot 插槽容器 */
+/** 自检测宿主:st-ui-slots 公共接口(__uiSlots__)或已渲染的 data-slot 容器 */
 function detectHost(): boolean {
   const uiSlots = (window as unknown as { __uiSlots__?: unknown }).__uiSlots__
   if (uiSlots !== undefined) return true
@@ -22,27 +19,26 @@ export default {
   name: 'ui-tool-plugin',
   mount(_el: HTMLElement) {
     try {
-      // 幂等:先清旧注入
-      removeInjected()
-      const opts = DEFAULT_THEME
+      // 主题引擎构造即注入默认白色玻璃主题(背景 + 插槽美化 + 光球)
+      const theme = createThemeEngine()
       if (!detectHost()) {
         console.warn('[ui-tool-plugin] 未检测到 st-ui-slots 宿主插槽,插槽主题不可见(背景主题仍注入)')
       }
-      const style = document.createElement('style')
-      style.id = STYLE_ID
-      style.textContent = buildThemeCss(opts)
-      document.head.appendChild(style)
-      for (let i = 0; i < normalizeOrbCount(opts.orbCount); i++) {
-        const orb = document.createElement('div')
-        orb.className = 'st-beautify-orb'
-        orb.setAttribute('data-index', String(i))
-        document.body.appendChild(orb)
+      // 挂载全局工具库(13 工具 + theme)
+      ;(window as unknown as { __uiTools__?: UiTools }).__uiTools__ = {
+        ...createTools(),
+        theme,
       }
     } catch (e) {
       console.error('[ui-tool-plugin] mount failed:', e)
     }
   },
   unmount() {
-    removeInjected()
+    // 关闭全部活动浮层
+    closeAllTools()
+    // 卸载主题(内置 + install 残留)
+    const ui = (window as unknown as { __uiTools__?: UiTools }).__uiTools__
+    ui?.theme.destroy()
+    delete (window as unknown as { __uiTools__?: UiTools }).__uiTools__
   },
 }

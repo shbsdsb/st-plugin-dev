@@ -85,4 +85,13 @@ describe('createThemeEngine', () => {
     expect(headChildren.find((c) => c.id === 'ui-tool-plugin-install')).toBeUndefined()
     expect(bodyChildren.some((c) => c.id === 'ui-tool-plugin-install-js')).toBe(false)
   })
+
+  it('destroy:卸载 install 残留与内置主题(清场)', () => {
+    engine.install({ css: 'body{color:red}', html: '<div>x</div>', js: 'window.x=1' })
+    engine.destroy()
+    expect(headChildren.find((c) => c.id === 'ui-tool-plugin-install')).toBeUndefined()
+    expect(headChildren.find((c) => c.id === 'ui-tool-plugin-theme')).toBeUndefined()
+    expect(bodyChildren.some((c) => c.id === 'ui-tool-plugin-install-html')).toBe(false)
+    expect(bodyChildren.some((c) => c.id === 'ui-tool-plugin-install-js')).toBe(false)
+  })
 })
