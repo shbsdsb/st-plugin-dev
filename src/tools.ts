@@ -206,6 +206,7 @@ export function createTools(): Tools {
       show(mask)
     },
     tooltip(el, text) {
+      ensureStyle()
       const tip = document.createElement('div')
       tip.className = 'fw-tip'
       tip.textContent = text
@@ -221,14 +222,12 @@ export function createTools(): Tools {
       }, 2500)
     },
     badge(el, count) {
+      ensureStyle()
       const old = el.querySelector('.badge-dot') as HTMLElement | null
       if (old) { old.remove(); return }
       const dot = document.createElement('span')
       dot.className = 'badge-dot'
       dot.textContent = String(count ?? 3)
-      const style = document.createElement('style')
-      style.textContent = '@keyframes ui-tool-pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.1)}}'
-      document.head.appendChild(style)
       if (!el.style.position) el.style.position = 'relative'
       el.appendChild(dot)
     },
