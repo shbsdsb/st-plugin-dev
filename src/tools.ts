@@ -177,12 +177,137 @@ export function createTools(): Tools {
       const el = createFloat({ mod: 'fw-slide', icon: '→', title, desc, closable: true })
       show(el)
     },
-    modal: () => { throw new Error('modal: Task 2 实现') },
-    tooltip: () => { throw new Error('tooltip: Task 2 实现') },
-    badge: () => { throw new Error('badge: Task 2 实现') },
-    progress: () => { throw new Error('progress: Task 2 实现') },
-    dismissible: () => { throw new Error('dismissible: Task 2 实现') },
-    centerPopup: () => { throw new Error('centerPopup: Task 2 实现') },
-    pluginModal: () => { throw new Error('pluginModal: Task 2 实现') },
+    modal({ title, desc, onOk, onCancel }) {
+      closeMasked()
+      const mask = document.createElement('div')
+      mask.className = 'fw-mask'
+      const box = document.createElement('div')
+      box.className = 'fw-modal'
+      const h = document.createElement('h3')
+      h.style.cssText = 'font-size:16px;margin-bottom:8px;'
+      h.textContent = title
+      const p = document.createElement('p')
+      p.style.cssText = 'font-size:12px;color:#64748b;margin:8px 0 18px;line-height:1.6;'
+      p.textContent = desc ?? ''
+      const acts = document.createElement('div')
+      acts.style.cssText = 'display:flex;gap:10px;justify-content:center;'
+      const ok = document.createElement('button')
+      ok.textContent = '确认'
+      ok.style.cssText = 'border:none;border-radius:40px;padding:9px 22px;font-size:12px;font-weight:600;cursor:pointer;background:#7c6df6;color:#fff;'
+      ok.addEventListener('click', () => { hideMask(mask); onOk?.() })
+      const no = document.createElement('button')
+      no.textContent = '取消'
+      no.style.cssText = 'border:none;border-radius:40px;padding:9px 22px;font-size:12px;font-weight:600;cursor:pointer;background:rgba(148,163,184,0.2);color:#475569;'
+      no.addEventListener('click', () => { hideMask(mask); onCancel?.() })
+      acts.append(ok, no)
+      box.append(h, p, acts)
+      mask.append(box)
+      masked.push(mask)
+      show(mask)
+    },
+    tooltip(el, text) {
+      const tip = document.createElement('div')
+      tip.className = 'fw-tip'
+      tip.textContent = text
+      document.body.appendChild(tip)
+      active.push(tip)
+      const r = el.getBoundingClientRect()
+      tip.style.left = Math.max(8, r.left + r.width / 2 - 60) + 'px'
+      tip.style.top = Math.max(4, r.top - 40) + 'px'
+      setTimeout(() => {
+        const i = active.indexOf(tip)
+        if (i >= 0) active.splice(i, 1)
+        tip.remove()
+      }, 2500)
+    },
+    badge(el, count) {
+      const old = el.querySelector('.badge-dot') as HTMLElement | null
+      if (old) { old.remove(); return }
+      const dot = document.createElement('span')
+      dot.className = 'badge-dot'
+      dot.textContent = String(count ?? 3)
+      const style = document.createElement('style')
+      style.textContent = '@keyframes ui-tool-pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.1)}}'
+      document.head.appendChild(style)
+      if (!el.style.position) el.style.position = 'relative'
+      el.appendChild(dot)
+    },
+    progress({ title, onDone }) {
+      const el = createFloat({ mod: 'fw-prog', icon: '↓', title })
+      const pb = document.createElement('div')
+      pb.className = 'pb'
+      const fill = document.createElement('i')
+      pb.appendChild(fill)
+      el.appendChild(pb)
+      show(el)
+      let p = 0
+      const timer = setInterval(() => {
+        p = Math.min(100, p + 14)
+        fill.style.width = p + '%'
+        if (p >= 100) {
+          clearInterval(timer)
+          setTimeout(() => { hide(el); onDone?.() }, 500)
+        }
+      }, 300)
+    },
+    dismissible(msg) {
+      const el = createFloat({ mod: 'fw-dismiss', icon: '✓', title: msg, closable: true })
+      show(el)
+    },
+    centerPopup({ title, desc, icon }) {
+      const el = createFloat({ mod: 'fw-center', icon: undefined, title })
+      const big = document.createElement('div')
+      big.className = 'big'
+      big.textContent = icon ?? '♥'
+      el.insertBefore(big, el.querySelector('div'))
+      const sp = document.createElement('span')
+      sp.textContent = desc ?? ''
+      sp.style.cssText = 'font-size:12px;color:#64748b;'
+      el.appendChild(sp)
+      show(el, 2800)
+    },
+    pluginModal({ title, content, actions, width }) {
+      closeMasked()
+      const mask = document.createElement('div')
+      mask.className = 'fw-mask'
+      const box = document.createElement('div')
+      box.className = 'fw-modal'
+      box.style.cssText = `width:${width ? width + 'px' : 'min(420px,92vw)'};max-height:82vh;display:flex;flex-direction:column;overflow:hidden;text-align:left;padding:0;`
+      // 头部:标题 + 右上角固定 ✕(无条件关闭)
+      const ph = document.createElement('div')
+      ph.style.cssText = 'display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid rgba(148,163,184,0.25);'
+      const t = document.createElement('b')
+      t.style.cssText = 'font-size:14px;'
+      t.textContent = title ?? ''
+      const x = document.createElement('button')
+      x.textContent = '✕'
+      x.style.cssText = 'width:26px;height:26px;border-radius:50%;border:none;background:rgba(148,163,184,0.2);color:#475569;cursor:pointer;font-size:12px;display:flex;align-items:center;justify-content:center;'
+      x.addEventListener('click', () => hideMask(mask))
+      ph.append(t, x)
+      // 内容区:HTML 字符串 / 渲染函数 / DOM 节点
+      const pc = document.createElement('div')
+      pc.style.cssText = 'padding:18px 16px;overflow:auto;flex:1;font-size:13px;color:#334155;line-height:1.7;'
+      if (typeof content === 'string') pc.innerHTML = content
+      else if (typeof content === 'function') content(pc)
+      else pc.appendChild(content)
+      box.append(ph, pc)
+      // 底部按钮区(插件注册)
+      if (actions && actions.length > 0) {
+        const pa = document.createElement('div')
+        pa.style.cssText = 'display:flex;gap:10px;justify-content:flex-end;padding:12px 16px;border-top:1px solid rgba(148,163,184,0.25);'
+        for (const a of actions) {
+          const btn = document.createElement('button')
+          btn.textContent = a.label
+          btn.style.cssText = 'border:none;border-radius:40px;padding:9px 22px;font-size:12px;font-weight:600;cursor:pointer;' +
+            (a.variant === 'primary' ? 'background:#7c6df6;color:#fff;' : a.variant === 'danger' ? 'background:#dc2626;color:#fff;' : 'background:rgba(148,163,184,0.2);color:#475569;')
+          btn.addEventListener('click', () => { hideMask(mask); a.onClick?.() })
+          pa.appendChild(btn)
+        }
+        box.append(pa)
+      }
+      mask.append(box)
+      masked.push(mask)
+      show(mask)
+    },
   }
 }
