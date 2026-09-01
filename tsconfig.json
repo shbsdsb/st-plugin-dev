@@ -14,5 +14,5 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true
   },
-  "include": ["src/index.ts", "src/theme.ts", "src/web.tsx"]
+  "include": ["src/index.ts", "src/theme.ts", "src/web.tsx", "src/tools.ts", "src/theme-engine.ts"]
 }
