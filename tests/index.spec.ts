@@ -81,7 +81,7 @@ describe('host plugin', () => {
     expect(instance.start).toHaveBeenCalledWith(8080, '127.0.0.1')
     expect(vi.mocked(execFileSync)).toHaveBeenCalled() // open 打开浏览器
     expect((ctx as { logger: { info: ReturnType<typeof vi.fn> } }).logger.info).toHaveBeenCalledWith(
-      'Host listening on http://127.0.0.1:8080',
+      'Host listening on http://127.0.0.1:8080,本机访问 http://127.0.0.1:8080',
     )
   })
 
