@@ -16,13 +16,11 @@ export const DEFAULT_CONFIG: HostConfig = {
   host: '127.0.0.1', port: 3000, listen: false, listenWhitelist: [], open: true,
 }
 
-/** listen/listenWhitelist 语义 → 监听地址(CIDR 项仅用于来源过滤,不能 bind) */
+/** listen/listenWhitelist 语义 → 监听地址 */
 export function resolveListenTarget(cfg: HostConfig): string {
   if (!cfg.listen) return cfg.host
-  if (cfg.listenWhitelist.length > 0) {
-    const bind = cfg.listenWhitelist.find((x) => parseCIDR(x) === null)
-    if (bind) return bind
-  }
+  // listen=true:绑定所有接口(0.0.0.0),让局域网设备(手机等)可访问;
+  // listenWhitelist 仅作来源 IP 白名单过滤(见 web-server 403),不决定绑定地址。
   return '0.0.0.0'
 }
 

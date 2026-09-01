@@ -35,14 +35,10 @@ describe('normalizeConfig/resolveListenTarget', () => {
     expect(normalizeConfig(undefined)).toEqual(DEFAULT_CONFIG)
   })
 
-  it('resolveListenTarget:listen=false → host;listen=true+白名单 → 白名单[0];无白名单 → 0.0.0.0', () => {
+  it('resolveListenTarget:listen=false → host;listen=true 恒 → 0.0.0.0(监听所有接口,白名单仅过滤)', () => {
     expect(resolveListenTarget({ ...DEFAULT_CONFIG, listen: false })).toBe('127.0.0.1')
-    expect(resolveListenTarget({ ...DEFAULT_CONFIG, listen: true, listenWhitelist: ['10.0.0.1'] })).toBe('10.0.0.1')
+    expect(resolveListenTarget({ ...DEFAULT_CONFIG, listen: true, listenWhitelist: ['10.0.0.1'] })).toBe('0.0.0.0')
     expect(resolveListenTarget({ ...DEFAULT_CONFIG, listen: true })).toBe('0.0.0.0')
-  })
-
-  it('resolveListenTarget 跳过 CIDR 项:首个非 CIDR IP 作绑定,全 CIDR → 0.0.0.0', () => {
-    expect(resolveListenTarget({ ...DEFAULT_CONFIG, listen: true, listenWhitelist: ['192.168.1.0/24', '10.0.0.1'] })).toBe('10.0.0.1')
     expect(resolveListenTarget({ ...DEFAULT_CONFIG, listen: true, listenWhitelist: ['192.168.1.0/24'] })).toBe('0.0.0.0')
   })
 })
