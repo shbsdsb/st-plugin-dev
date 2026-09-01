@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<title>plugin-setting UI 原型</title>
+<title>plugin-setting UI 原型 v2</title>
 <style>
   * { box-sizing: border-box; margin: 0; }
   body { font-family: system-ui, sans-serif; height: 100vh; display: flex; flex-direction: column; background: #f1f5f9; color: #1f2d3d; }
@@ -11,6 +11,7 @@
   #left { width: 240px; flex-shrink: 0; border-right: 1px solid #ccc; background: #fff; display: flex; flex-direction: column; transition: width .2s; overflow: hidden; }
   #left.collapsed { width: 40px; align-items: center; }
   #left .top { padding: 6px 8px; display: flex; justify-content: flex-end; }
+  #left.collapsed .top { padding: 6px 0; justify-content: center; }
   #left .slot { flex: 1; padding: 8px; display: flex; flex-direction: column; justify-content: flex-end; gap: 6px; }
   #left.collapsed .slot { padding: 6px 0; align-items: center; }
   #main { flex: 1; padding: 16px; overflow: auto; background: #f8fafc; }
@@ -18,25 +19,43 @@
   .gear-row { display: flex; align-items: center; gap: 8px; width: 100%; justify-content: flex-end; padding: 6px 10px; border: none; background: none; cursor: pointer; color: #475569; font-size: 13px; border-radius: 8px; }
   .gear-row:hover { background: rgba(124,109,246,.08); }
   .gear-row .ic { font-size: 15px; }
+  /* 收起态:40px 窄条内齿轮按钮只显示图标,文字隐藏 */
+  #left.collapsed .gear-row { justify-content: center; padding: 6px 0; }
+  #left.collapsed .gear-row span:last-child { display: none; }
+
+  /* ===== 弹窗(模拟 __uiTools__.pluginModal) ===== */
   #mask { position: fixed; inset: 0; background: rgba(15,23,42,.28); z-index: 9999; display: none; align-items: center; justify-content: center; }
   #mask.show { display: flex; }
-  #dialog { background: rgba(255,255,255,.9); backdrop-filter: blur(22px); border: 1px solid rgba(148,163,184,.5); border-radius: 22px; width: min(560px, 92vw); max-height: 80vh; display: flex; flex-direction: column; box-shadow: 0 24px 56px rgba(31,38,135,.2); }
-  #dialog header { padding: 16px 20px 8px; font-weight: 600; display: flex; justify-content: space-between; align-items: center; }
-  #dialog header .x { border: none; background: none; cursor: pointer; font-size: 16px; color: #94a3b8; }
-  #list { flex: 1; overflow: auto; padding: 8px 12px; }
-  .entry { border: 1px solid rgba(148,163,184,.35); border-radius: 12px; margin-bottom: 8px; background: rgba(255,255,255,.7); }
-  .entry .head { display: flex; align-items: center; gap: 8px; padding: 10px 12px; cursor: grab; }
+  #dialog { background: rgba(255,255,255,.92); backdrop-filter: blur(22px); border: 1px solid rgba(148,163,184,.5); border-radius: 22px; width: 560px; max-width: 92vw; max-height: 82vh; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 24px 56px rgba(31,38,135,.2); text-align: left; padding: 0; }
+  #dialog .ph { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; border-bottom: 1px solid rgba(148,163,184,.25); }
+  #dialog .ph b { font-size: 14px; }
+  #dialog .ph .x { width: 26px; height: 26px; border-radius: 50%; border: none; background: rgba(148,163,184,.2); color: #475569; cursor: pointer; font-size: 12px; }
+  #dialog .pc { padding: 14px 16px; overflow: auto; flex: 1; font-size: 13px; color: #334155; line-height: 1.7; }
+  #dialog .pa { display: flex; gap: 10px; justify-content: flex-end; padding: 12px 16px; border-top: 1px solid rgba(148,163,184,.25); }
+
+  /* ===== 基础单列表(可拖拽,transform 排序) ===== */
+  #list { position: relative; }
+  .entry { position: relative; height: 46px; margin-bottom: 8px; border: 1px solid rgba(148,163,184,.35); border-radius: 12px; background: rgba(255,255,255,.85); will-change: transform; transition: transform .3s cubic-bezier(.22,.61,.36,1), box-shadow .2s ease; }
+  .entry .head { display: flex; align-items: center; gap: 8px; height: 46px; padding: 0 12px; cursor: grab; user-select: none; }
   .entry .head .drag { color: #cbd5e1; cursor: grab; font-size: 14px; }
-  .entry .head .name { flex: 1; font-size: 13px; font-weight: 500; }
+  .entry .head .name { flex: 1; font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .entry .head .caret { border: none; background: none; cursor: pointer; color: #64748b; }
-  .entry .detail { border-top: 1px dashed rgba(148,163,184,.4); padding: 12px; font-size: 12px; display: none; }
+  /* 拖拽中:跟随鼠标 + 阴影 + 缩放 */
+  .entry.dragging { z-index: 100; box-shadow: 0 12px 40px rgba(31,38,135,.25); border-color: rgba(124,109,246,.6); cursor: grabbing; transition: box-shadow .2s ease, border-color .2s ease; }
+  .entry.dragging .drag { color: #7c6df6; }
+  /* 其他条目让位:transform 过渡由 .entry 的 transition 提供 */
+  .entry .detail { border-top: 1px dashed rgba(148,163,184,.4); padding: 12px; font-size: 12px; display: none; background: rgba(248,250,252,.6); border-radius: 0 0 12px 12px; }
+  .entry.open { height: auto; }
   .entry.open .detail { display: block; }
   .field { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
   .field label { width: 110px; flex-shrink: 0; color: #475569; }
   .field input[type=text], .field input[type=number] { flex: 1; padding: 6px 8px; border: 1px solid rgba(148,163,184,.5); border-radius: 8px; font-size: 13px; }
   .field textarea { flex: 1; min-height: 80px; padding: 6px 8px; border: 1px solid rgba(148,163,184,.5); border-radius: 8px; font-family: monospace; font-size: 12px; }
   .none { color: #94a3b8; }
-  footer { padding: 12px 20px 16px; display: flex; justify-content: flex-end; gap: 8px; border-top: 1px solid rgba(148,163,184,.25); }
+  /* 放置指示线 */
+  .drop-indicator { position: absolute; left: 8px; right: 8px; height: 3px; border-radius: 3px; background: #7c6df6; opacity: 0; transition: opacity .15s ease; pointer-events: none; box-shadow: 0 0 10px rgba(124,109,246,.5); }
+  .drop-indicator.visible { opacity: 1; }
+  .drag-hint { font-size: 11px; color: #94a3b8; margin-bottom: 8px; }
   button.primary { background: #7c6df6; color: #fff; border: none; border-radius: 40px; padding: 8px 18px; cursor: pointer; font-size: 13px; }
   button.ghost { background: none; border: 1px solid rgba(148,163,184,.5); border-radius: 40px; padding: 8px 18px; cursor: pointer; font-size: 13px; color: #475569; }
   .toast { position: fixed; top: 24px; left: 50%; transform: translateX(-50%); background: rgba(255,255,255,.9); border-radius: 40px; padding: 10px 22px; font-size: 13px; box-shadow: 0 8px 24px rgba(31,38,135,.16); display: none; z-index: 10001; }
@@ -53,17 +72,20 @@
     </div>
   </div>
   <div id="main">
-    <h3 style="font-size:14px;color:#64748b;">左侧栏底部为齿轮按钮(向右对齐);点左上 ◀ 收起左栏,齿轮进入 40px 窄条。</h3>
+    <h3 style="font-size:14px;color:#64748b;">左侧栏底部为齿轮按钮(右对齐);收起左栏后仅显示 ⚙ 图标(40px 窄条)。<br>点击齿轮打开弹窗(模拟 __uiTools__.pluginModal):条目可拖拽排序(实时让位动画),展开后按类型显示控件。</h3>
   </div>
 </div>
 <div id="mask">
   <div id="dialog">
-    <header><span>插件设置</span><button class="x" id="close">✕</button></header>
-    <div id="list"></div>
-    <footer>
+    <div class="ph"><b>插件设置</b><button class="x" id="close">✕</button></div>
+    <div class="pc">
+      <p class="drag-hint">✨ 拖拽时其他条目会平滑让位,被拖拽项实时跟随</p>
+      <div id="list"><div class="drop-indicator" id="dropIndicator"></div></div>
+    </div>
+    <div class="pa">
       <button class="ghost" id="cancel">取消</button>
       <button class="primary" id="save">保存</button>
-    </footer>
+    </div>
   </div>
 </div>
 <div class="toast" id="toast"></div>
@@ -75,26 +97,21 @@
     { id: 'st-ui-slots', name: 'st-ui-slots', config: {} },
     { id: 'ui-tool-plugin', name: 'ui-tool-plugin', config: null },
   ]
-  let order = ENTRIES.map(e => e.id)
-  let openId = null
-  let dragFrom = null
-
   const $ = (id) => document.getElementById(id)
   const toast = (msg) => { const t = $('toast'); t.textContent = msg; t.classList.add('show'); setTimeout(() => t.classList.remove('show'), 1800) }
 
-  // ---- 左栏收起/展开 ----
+  // ---- 左栏收起/展开(收起态齿轮按钮仅图标,文字由 CSS 隐藏) ----
   $('collapse').addEventListener('click', () => {
-    const left = $('left')
-    left.classList.toggle('collapsed')
-    $('collapse').textContent = left.classList.contains('collapsed') ? '▶' : '◀'
+    $('left').classList.toggle('collapsed')
+    $('collapse').textContent = $('left').classList.contains('collapsed') ? '▶' : '◀'
   })
 
-  // ---- 弹窗 ----
+  // ---- 弹窗(模拟 __uiTools__.pluginModal({title, content: renderFn, actions})) ----
   const openDialog = () => { $('mask').classList.add('show'); renderList() }
   const closeDialog = () => { $('mask').classList.remove('show') }
   $('gear').addEventListener('click', openDialog)
   $('close').addEventListener('click', closeDialog)
-  $('cancel').addEventListener('click', () => { order = ENTRIES.map(e => e.id); openId = null; closeDialog() })
+  $('cancel').addEventListener('click', () => { openId = null; closeDialog() })
 
   // ---- 控件(按 config 运行时值类型) ----
   function control(id, key, value, onChange) {
@@ -120,47 +137,129 @@
     return wrap
   }
 
+  // ---- 基础单渲染 + transform 拖拽排序(参考 deepseek_html 实时视觉) ----
+  const container = $('list')
+  const dropIndicator = $('dropIndicator')
+  let order = ENTRIES.map((_, i) => i)   // order[pos] = 数据索引
+  let openId = null
+  let items = [];                         // 当前 DOM 条目(与 ENTRIES 索引一致)
+  const STEP = 54                         // 46(头部) + 8(gap)
+  let isDragging = false
+  let dragIndex = -1
+  let dragStartMouseY = 0
+  let currentTargetPos = -1
+  let animFrame = null
+
   function renderList() {
-    const list = $('list'); list.innerHTML = ''
-    for (const id of order) {
-      const e = ENTRIES.find(x => x.id === id)
-      if (!e) continue
-      const box = document.createElement('div'); box.className = 'entry' + (openId === id ? ' open' : '')
+    container.innerHTML = ''
+    container.appendChild(dropIndicator)
+    items = ENTRIES.map((e, i) => {
+      const box = document.createElement('div')
+      box.className = 'entry' + (openId === i ? ' open' : '')
+      box.dataset.index = i
+      // 头部
       const head = document.createElement('div'); head.className = 'head'
-      head.draggable = true
-      head.addEventListener('dragstart', () => { dragFrom = order.indexOf(id) })
-      head.addEventListener('dragover', (ev) => ev.preventDefault())
-      head.addEventListener('drop', () => {
-        const from = dragFrom, to = order.indexOf(id)
-        if (from === null || from === to) return
-        order.splice(to, 0, order.splice(from, 1)[0])
-        renderList()
-      })
       const drag = document.createElement('span'); drag.className = 'drag'; drag.textContent = '⋮⋮'; head.appendChild(drag)
       const name = document.createElement('span'); name.className = 'name'; name.textContent = e.name; head.appendChild(name)
-      const caret = document.createElement('button'); caret.className = 'caret'; caret.textContent = openId === id ? '▾' : '▸'
-      caret.addEventListener('click', () => { openId = openId === id ? null : id; renderList() })
+      const caret = document.createElement('button'); caret.className = 'caret'; caret.textContent = openId === i ? '▾' : '▸'
+      caret.addEventListener('click', () => { openId = openId === i ? null : i; renderList() })
       head.appendChild(caret)
       box.appendChild(head)
-      // 展开详情:插件 ID + 配置控件
+      // 展开详情(插件 ID + 配置控件)
       const detail = document.createElement('div'); detail.className = 'detail'
       const idLine = document.createElement('div'); idLine.style.cssText = 'color:#94a3b8;margin-bottom:8px;'
-      idLine.textContent = '插件 ID: ' + id; detail.appendChild(idLine)
+      idLine.textContent = '插件 ID: ' + e.id; detail.appendChild(idLine)
       if (e.config && typeof e.config === 'object') {
         for (const key of Object.keys(e.config)) {
-          detail.appendChild(control(id, key, e.config[key], (k, v) => { e.config[k] = v }))
+          detail.appendChild(control(i, key, e.config[key], (k, v) => { e.config[k] = v }))
         }
       } else {
         const span = document.createElement('span'); span.className = 'none'; span.textContent = '无配置'; detail.appendChild(span)
       }
       box.appendChild(detail)
-      list.appendChild(box)
+      container.appendChild(box)
+      return box
+    })
+    updateAllPositions(false)
+  }
+
+  function posOf(dataIndex) { return order.indexOf(dataIndex) }
+  function updateAllPositions(animate = true) {
+    for (let i = 0; i < items.length; i++) {
+      if (isDragging && i === dragIndex) continue
+      items[i].style.transform = `translateY(${posOf(i) * STEP}px)`
+    }
+    if (isDragging && currentTargetPos >= 0) {
+      dropIndicator.style.top = `${currentTargetPos * STEP - 4}px`
+      dropIndicator.classList.add('visible')
+    } else {
+      dropIndicator.classList.remove('visible')
     }
   }
 
+  function updateOrder(targetPos) {
+    const cur = posOf(dragIndex)
+    order.splice(cur, 1)
+    order.splice(targetPos, 0, dragIndex)
+    currentTargetPos = targetPos
+  }
+
+  function moveDrag(mouseY) {
+    if (animFrame) cancelAnimationFrame(animFrame)
+    animFrame = requestAnimationFrame(() => {
+      const el = items[dragIndex]
+      el.style.transform = `translateY(${mouseY - dragStartMouseY}px) scale(1.03)`
+      const rect = container.getBoundingClientRect()
+      const relY = mouseY - rect.top - 23
+      const targetPos = Math.max(0, Math.min(items.length - 1, Math.round(relY / STEP)))
+      if (targetPos !== currentTargetPos) updateOrder(targetPos)
+      updateAllPositions(true)
+    })
+  }
+
+  function startDrag(index, mouseY) {
+    // 拖拽前自动收起展开条目,保证固定 step 视觉正确
+    if (openId !== null) { openId = null; renderList() }
+    isDragging = true
+    dragIndex = index
+    dragStartMouseY = mouseY
+    currentTargetPos = posOf(index)
+    const el = items[index]
+    el.classList.add('dragging')
+    el.style.zIndex = '100'
+    el.style.transform = 'translateY(0px) scale(1.03)'
+    dropIndicator.classList.add('visible')
+    dropIndicator.style.top = `${currentTargetPos * STEP - 4}px`
+    updateAllPositions(true)
+  }
+
+  function endDrag() {
+    if (!isDragging) return
+    isDragging = false
+    const el = items[dragIndex]
+    el.classList.remove('dragging')
+    el.style.zIndex = ''
+    updateAllPositions(true)
+    dragIndex = -1
+    currentTargetPos = -1
+  }
+
+  container.addEventListener('mousedown', (e) => {
+    const head = e.target.closest('.head')
+    if (!head) return
+    const box = head.closest('.entry')
+    const idx = parseInt(box.dataset.index, 10)
+    if (e.target.closest('.caret')) return   // 点击展开箭头不触发拖拽
+    startDrag(idx, e.clientY)
+    e.preventDefault()
+  })
+  document.addEventListener('mousemove', (e) => { if (isDragging) moveDrag(e.clientY) })
+  document.addEventListener('mouseup', () => { if (isDragging) endDrag() })
+  container.addEventListener('dragstart', (e) => e.preventDefault())
+
   // ---- 保存(原型模拟:打印 payload) ----
   $('save').addEventListener('click', () => {
-    const payload = { entries: order.map(id => { const e = ENTRIES.find(x => x.id === id); return { id, config: e.config ?? null } }) }
+    const payload = { entries: order.map(i => { const e = ENTRIES[i]; return { id: e.id, config: e.config ?? null } }) }
     console.log('[plugin-setting] 保存 payload(完整 config,整行替换):', JSON.stringify(payload, null, 2))
     toast('已保存(原型模拟)→ hot-reload 将自动重载')
     closeDialog()
