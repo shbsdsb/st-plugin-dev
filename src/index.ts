@@ -31,9 +31,15 @@ export function apply(ctx: Context) {
   if (!existsSync(lockPath)) return
   const interval = Number(process.env.ST_HOT_RELOAD_INTERVAL ?? 2000)
   let oldLock = readFileSync(lockPath, 'utf8')
+  const profile = process.env.ST_PROFILE ?? 'default'
+  const patchPaths = [
+    join(stHome, 'profile', profile, 'cordis.patch.yml'),
+    join(stHome, 'cordis.patch.yml'),
+  ].filter((p) => existsSync(p))
 
   const disposeWatcher = createWatcher({
     lockPath,
+    patchPaths,
     interval,
     onChange: () => {
       const newLock = readFileSync(lockPath, 'utf8')
@@ -41,6 +47,20 @@ export function apply(ctx: Context) {
       void reload(ctx as never, changed).then(() => {
         oldLock = newLock
       })
+    },
+    onPatchChange: () => {
+      // 配置变更不涉及代码:直接重建树(跳过隔离验证);失败保持旧树
+      void (async () => {
+        const stHome2 = process.env.ST_HOME ?? ''
+        const profile2 = process.env.ST_PROFILE ?? 'default'
+        try {
+          const entries = await ctx.treeBuilder.build({ stHome: stHome2, profile: profile2 })
+          await ctx.loader.root.update(entries as never)
+          ctx.logger.info('[hot-reload] 配置变更已生效(cordis.patch.yml)')
+        } catch (error) {
+          ctx.logger.warn(`[hot-reload] 配置重载失败,保持旧插件: ${(error as Error).message}`)
+        }
+      })()
     },
   })
 

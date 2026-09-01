@@ -3,24 +3,39 @@ import { existsSync, readFileSync } from 'node:fs'
 
 export interface WatcherOptions {
   lockPath: string
+  /** 额外监听的 patch 文件(变化触发 onPatchChange) */
+  patchPaths?: string[]
   interval?: number
   onChange: () => void
+  /** patch 文件变化回调(可选) */
+  onPatchChange?: () => void
 }
 
-/** 轮询 lock 文件 sha256,变化触发 onChange;返回 dispose */
+/** 轮询监听:lock 变化 → onChange;任一 patch 变化 → onPatchChange;初次快照不触发;返回 dispose */
 export function createWatcher(opts: WatcherOptions): () => void {
-  let lastHash: string | null = null
   const interval = opts.interval ?? 2000
+  const hashOf = (path: string): string =>
+    existsSync(path) ? createHash('sha256').update(readFileSync(path)).digest('hex') : ''
+  const last = new Map<string, string>()
   const timer = setInterval(() => {
-    if (!existsSync(opts.lockPath)) return
-    const hash = createHash('sha256').update(readFileSync(opts.lockPath)).digest('hex')
-    if (lastHash === null) {
-      lastHash = hash
-      return
+    if (existsSync(opts.lockPath)) {
+      const lockHash = hashOf(opts.lockPath)
+      if (!last.has(opts.lockPath)) {
+        last.set(opts.lockPath, lockHash)
+      } else if (lockHash !== last.get(opts.lockPath)) {
+        last.set(opts.lockPath, lockHash)
+        opts.onChange()
+      }
     }
-    if (hash !== lastHash) {
-      lastHash = hash
-      opts.onChange()
+    for (const p of opts.patchPaths ?? []) {
+      if (!existsSync(p)) continue
+      const h = hashOf(p)
+      if (!last.has(p)) {
+        last.set(p, h)
+      } else if (h !== last.get(p)) {
+        last.set(p, h)
+        opts.onPatchChange?.()
+      }
     }
   }, interval)
   return () => clearInterval(timer)
