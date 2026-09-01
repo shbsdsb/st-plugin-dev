@@ -55,4 +55,19 @@ describe('SlotRegistry', () => {
     r.register('nav', { name: 'b', render: () => {} })
     expect(listener).toHaveBeenCalledTimes(2)
   })
+
+  it('register 支持带 collapsedRender 的内容(原样保留)', () => {
+    const r = new SlotRegistry()
+    const c = { name: 'a', render: () => {}, collapsedRender: () => {} }
+    r.register('sidebar-left', c)
+    expect(r.get('sidebar-left')).toEqual([c])
+    expect(typeof r.get('sidebar-left')[0].collapsedRender).toBe('function')
+  })
+
+  it('无 collapsedRender 的内容也可注册(可选字段)', () => {
+    const r = new SlotRegistry()
+    const c = { name: 'a', render: () => {} }
+    r.register('sidebar-left', c)
+    expect(r.get('sidebar-left')[0].collapsedRender).toBeUndefined()
+  })
 })

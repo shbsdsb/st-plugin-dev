@@ -4,6 +4,8 @@ export type SlotName = (typeof SLOT_NAMES)[number]
 export interface SlotContent {
   name: string
   render(el: HTMLElement): void | Promise<void>
+  /** 可选:左栏收起态(40px 窄条)渲染;未提供则不渲染 */
+  collapsedRender?(el: HTMLElement): void | Promise<void>
   unmount?(): void
 }
 

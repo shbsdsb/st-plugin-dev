@@ -35,7 +35,7 @@ export function Layout(props: { registry: SlotRegistry }): React.ReactElement {
   const [rightCollapsed, setRightCollapsed] = React.useState(false)
   const [overlayPos, setOverlayPos] = React.useState({ x: 20, y: 60 })
   const [overlayVisible, setOverlayVisible] = React.useState(false)
-  const containers = React.useRef<Partial<Record<SlotName, HTMLDivElement | null>>>({})
+  const containers = React.useRef<Record<string, HTMLDivElement | null>>({})
   // 注册表修订计数:subscribe 通知时自增,触发 React 重渲染使新内容即时反映
   const [, setRevision] = React.useState(0)
 
@@ -53,10 +53,27 @@ export function Layout(props: { registry: SlotRegistry }): React.ReactElement {
     }
   }, [registry])
 
+  // 渲染某插槽的收起态内容(40px 窄条);无 collapsedRender 的内容跳过
+  const renderCollapsed = React.useCallback((slot: SlotName) => {
+    const el = containers.current[`collapsed-${slot}`]
+    if (!el) return
+    el.innerHTML = ''
+    for (const content of registry.get(slot)) {
+      try {
+        content.collapsedRender?.(el)
+      } catch (e) {
+        console.error('[st-ui-slots] collapsed render failed:', slot, content.name, e)
+      }
+    }
+  }, [registry])
+
   // 渲染全部已挂载的插槽容器
   const renderAll = React.useCallback(() => {
-    for (const slot of SLOT_NAMES) renderSlot(slot)
-  }, [renderSlot])
+    for (const slot of SLOT_NAMES) {
+      renderSlot(slot)
+      renderCollapsed(slot)
+    }
+  }, [renderSlot, renderCollapsed])
 
   // 订阅注册表:register/unregister 后即时重渲染并刷新容器;组件卸载时退订
   React.useEffect(() => {
@@ -69,7 +86,7 @@ export function Layout(props: { registry: SlotRegistry }): React.ReactElement {
   }, [registry, renderAll])
 
   // 稳定的容器 ref 回调:每插槽惰性缓存同一个函数,避免内联 ref 每次渲染触发重挂
-  const slotRefs = React.useRef<Partial<Record<SlotName, (el: HTMLDivElement | null) => void>>>({})
+  const slotRefs = React.useRef<Record<string, (el: HTMLDivElement | null) => void>>({})
   const slotRef = (slot: SlotName): ((el: HTMLDivElement | null) => void) => {
     let ref = slotRefs.current[slot]
     if (!ref) {
@@ -78,6 +95,19 @@ export function Layout(props: { registry: SlotRegistry }): React.ReactElement {
         if (el) renderSlot(slot)
       }
       slotRefs.current[slot] = ref
+    }
+    return ref
+  }
+
+  // 收起态容器 ref 回调:与 slotRef 同构,键为 `collapsed-${slot}`
+  const slotRefCollapsed = (slot: SlotName): ((el: HTMLDivElement | null) => void) => {
+    let ref = slotRefs.current[`collapsed-${slot}`]
+    if (!ref) {
+      ref = (el) => {
+        containers.current[`collapsed-${slot}`] = el
+        if (el) renderCollapsed(slot)
+      }
+      slotRefs.current[`collapsed-${slot}`] = ref
     }
     return ref
   }
@@ -115,9 +145,10 @@ export function Layout(props: { registry: SlotRegistry }): React.ReactElement {
   const sidebar = (side: 'left' | 'right', w: number, collapsed: boolean, setCollapsed: (v: boolean) => void) => {
     if (side === 'left') {
       if (collapsed) {
-        // 左栏收起:保留 40px 窄条(data-slot 保留,玻璃美化不消失),13 号展开按钮(V 朝右)
-        return React.createElement('div', { 'data-slot': 'sidebar-left', style: { width: COLLAPSED_LEFT_W, flexShrink: 0, display: 'flex', justifyContent: 'center', paddingTop: 8 } },
-          btn(React.createElement(IconDotChevron, { dir: 'right' }), () => setCollapsed(false), '展开侧边栏'))
+        // 左栏收起:40px 窄条(data-slot 保留),展开按钮 + 各内容收起态(collapsedRender)
+        return React.createElement('div', { 'data-slot': 'sidebar-left', style: { width: COLLAPSED_LEFT_W, flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', paddingTop: 8, gap: 6 } },
+          btn(React.createElement(IconDotChevron, { dir: 'right' }), () => setCollapsed(false), '展开侧边栏'),
+          React.createElement('div', { ref: slotRefCollapsed('sidebar-left'), style: { display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 } }))
       }
       return React.createElement(React.Fragment, null,
         React.createElement('div', { 'data-slot': 'sidebar-left', style: { width: w, flexShrink: 0, overflow: 'auto', display: 'flex', flexDirection: 'column', borderRight: '1px solid #ccc' } },
