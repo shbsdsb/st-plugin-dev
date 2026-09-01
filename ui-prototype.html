@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<title>plugin-setting UI 原型 v2</title>
+<title>plugin-setting UI 原型 v3</title>
 <style>
   * { box-sizing: border-box; margin: 0; }
   body { font-family: system-ui, sans-serif; height: 100vh; display: flex; flex-direction: column; background: #f1f5f9; color: #1f2d3d; }
@@ -16,46 +16,46 @@
   #left.collapsed .slot { padding: 6px 0; align-items: center; }
   #main { flex: 1; padding: 16px; overflow: auto; background: #f8fafc; }
   .slot-btn { width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; border: none; background: rgba(124,109,246,.14); border-radius: 50%; cursor: pointer; color: #7c6df6; font-size: 14px; }
-  .gear-row { display: flex; align-items: center; gap: 8px; width: 100%; justify-content: flex-end; padding: 6px 10px; border: none; background: none; cursor: pointer; color: #475569; font-size: 13px; border-radius: 8px; }
+  /* 齿轮按钮:展开态向左对齐 */
+  .gear-row { display: flex; align-items: center; gap: 8px; width: 100%; justify-content: flex-start; padding: 6px 10px; border: none; background: none; cursor: pointer; color: #475569; font-size: 13px; border-radius: 8px; }
   .gear-row:hover { background: rgba(124,109,246,.08); }
   .gear-row .ic { font-size: 15px; }
-  /* 收起态:40px 窄条内齿轮按钮只显示图标,文字隐藏 */
+  /* 收起态:40px 窄条内只显示图标,文字隐藏 */
   #left.collapsed .gear-row { justify-content: center; padding: 6px 0; }
   #left.collapsed .gear-row span:last-child { display: none; }
 
-  /* ===== 弹窗(模拟 __uiTools__.pluginModal) ===== */
+  /* ===== 弹窗(模拟 __uiTools__.pluginModal,加大宽度) ===== */
   #mask { position: fixed; inset: 0; background: rgba(15,23,42,.28); z-index: 9999; display: none; align-items: center; justify-content: center; }
   #mask.show { display: flex; }
-  #dialog { background: rgba(255,255,255,.92); backdrop-filter: blur(22px); border: 1px solid rgba(148,163,184,.5); border-radius: 22px; width: 560px; max-width: 92vw; max-height: 82vh; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 24px 56px rgba(31,38,135,.2); text-align: left; padding: 0; }
+  #dialog { background: rgba(255,255,255,.94); backdrop-filter: blur(22px); border: 1px solid rgba(148,163,184,.5); border-radius: 22px; width: 760px; max-width: 94vw; max-height: 84vh; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 24px 56px rgba(31,38,135,.2); text-align: left; padding: 0; }
   #dialog .ph { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; border-bottom: 1px solid rgba(148,163,184,.25); }
   #dialog .ph b { font-size: 14px; }
   #dialog .ph .x { width: 26px; height: 26px; border-radius: 50%; border: none; background: rgba(148,163,184,.2); color: #475569; cursor: pointer; font-size: 12px; }
-  #dialog .pc { padding: 14px 16px; overflow: auto; flex: 1; font-size: 13px; color: #334155; line-height: 1.7; }
-  #dialog .pa { display: flex; gap: 10px; justify-content: flex-end; padding: 12px 16px; border-top: 1px solid rgba(148,163,184,.25); }
-
-  /* ===== 基础单列表(可拖拽,transform 排序) ===== */
+  #dialog .pc { display: flex; flex: 1; min-height: 0; }
+  /* 左侧条目列表(固定高度条目,可拖拽) */
+  #list-pane { width: 320px; flex-shrink: 0; border-right: 1px solid rgba(148,163,184,.25); padding: 12px; overflow: auto; }
   #list { position: relative; }
-  .entry { position: relative; height: 46px; margin-bottom: 8px; border: 1px solid rgba(148,163,184,.35); border-radius: 12px; background: rgba(255,255,255,.85); will-change: transform; transition: transform .3s cubic-bezier(.22,.61,.36,1), box-shadow .2s ease; }
+  .entry { position: relative; height: 46px; margin-bottom: 8px; border: 1px solid rgba(148,163,184,.35); border-radius: 12px; background: rgba(255,255,255,.85); will-change: transform; transition: transform .3s cubic-bezier(.22,.61,.36,1), box-shadow .2s ease, border-color .2s ease; }
+  .entry.selected { border-color: rgba(124,109,246,.6); background: rgba(124,109,246,.06); }
   .entry .head { display: flex; align-items: center; gap: 8px; height: 46px; padding: 0 12px; cursor: grab; user-select: none; }
   .entry .head .drag { color: #cbd5e1; cursor: grab; font-size: 14px; }
   .entry .head .name { flex: 1; font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .entry .head .caret { border: none; background: none; cursor: pointer; color: #64748b; }
-  /* 拖拽中:跟随鼠标 + 阴影 + 缩放 */
   .entry.dragging { z-index: 100; box-shadow: 0 12px 40px rgba(31,38,135,.25); border-color: rgba(124,109,246,.6); cursor: grabbing; transition: box-shadow .2s ease, border-color .2s ease; }
   .entry.dragging .drag { color: #7c6df6; }
-  /* 其他条目让位:transform 过渡由 .entry 的 transition 提供 */
-  .entry .detail { border-top: 1px dashed rgba(148,163,184,.4); padding: 12px; font-size: 12px; display: none; background: rgba(248,250,252,.6); border-radius: 0 0 12px 12px; }
-  .entry.open { height: auto; }
-  .entry.open .detail { display: block; }
-  .field { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
-  .field label { width: 110px; flex-shrink: 0; color: #475569; }
-  .field input[type=text], .field input[type=number] { flex: 1; padding: 6px 8px; border: 1px solid rgba(148,163,184,.5); border-radius: 8px; font-size: 13px; }
-  .field textarea { flex: 1; min-height: 80px; padding: 6px 8px; border: 1px solid rgba(148,163,184,.5); border-radius: 8px; font-family: monospace; font-size: 12px; }
-  .none { color: #94a3b8; }
-  /* 放置指示线 */
   .drop-indicator { position: absolute; left: 8px; right: 8px; height: 3px; border-radius: 3px; background: #7c6df6; opacity: 0; transition: opacity .15s ease; pointer-events: none; box-shadow: 0 0 10px rgba(124,109,246,.5); }
   .drop-indicator.visible { opacity: 1; }
   .drag-hint { font-size: 11px; color: #94a3b8; margin-bottom: 8px; }
+  /* 右侧详情面板(点击条目后显示,条目本身不变化) */
+  #detail-pane { flex: 1; padding: 18px 20px; overflow: auto; }
+  #detail-pane .d-name { font-size: 15px; font-weight: 600; margin-bottom: 4px; }
+  #detail-pane .d-id { font-size: 12px; color: #94a3b8; margin-bottom: 14px; }
+  #detail-pane .empty { color: #94a3b8; font-size: 13px; text-align: center; margin-top: 60px; }
+  .field { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+  .field label { width: 130px; flex-shrink: 0; color: #475569; font-size: 12px; }
+  .field input[type=text], .field input[type=number] { flex: 1; padding: 6px 8px; border: 1px solid rgba(148,163,184,.5); border-radius: 8px; font-size: 13px; }
+  .field textarea { flex: 1; min-height: 90px; padding: 6px 8px; border: 1px solid rgba(148,163,184,.5); border-radius: 8px; font-family: monospace; font-size: 12px; }
+  .none { color: #94a3b8; }
+  #dialog .pa { display: flex; gap: 10px; justify-content: flex-end; padding: 12px 16px; border-top: 1px solid rgba(148,163,184,.25); }
   button.primary { background: #7c6df6; color: #fff; border: none; border-radius: 40px; padding: 8px 18px; cursor: pointer; font-size: 13px; }
   button.ghost { background: none; border: 1px solid rgba(148,163,184,.5); border-radius: 40px; padding: 8px 18px; cursor: pointer; font-size: 13px; color: #475569; }
   .toast { position: fixed; top: 24px; left: 50%; transform: translateX(-50%); background: rgba(255,255,255,.9); border-radius: 40px; padding: 10px 22px; font-size: 13px; box-shadow: 0 8px 24px rgba(31,38,135,.16); display: none; z-index: 10001; }
@@ -72,15 +72,20 @@
     </div>
   </div>
   <div id="main">
-    <h3 style="font-size:14px;color:#64748b;">左侧栏底部为齿轮按钮(右对齐);收起左栏后仅显示 ⚙ 图标(40px 窄条)。<br>点击齿轮打开弹窗(模拟 __uiTools__.pluginModal):条目可拖拽排序(实时让位动画),展开后按类型显示控件。</h3>
+    <h3 style="font-size:14px;color:#64748b;">齿轮按钮向左对齐;收起左栏后仅 ⚙ 图标(40px 窄条)。<br>弹窗加宽:左侧固定高度条目列表(可拖拽,实时让位),点击条目右侧面板显示配置(条目本身不变化)。</h3>
   </div>
 </div>
 <div id="mask">
   <div id="dialog">
     <div class="ph"><b>插件设置</b><button class="x" id="close">✕</button></div>
     <div class="pc">
-      <p class="drag-hint">✨ 拖拽时其他条目会平滑让位,被拖拽项实时跟随</p>
-      <div id="list"><div class="drop-indicator" id="dropIndicator"></div></div>
+      <div id="list-pane">
+        <p class="drag-hint">✨ 拖拽排序,条目高度固定,不重叠</p>
+        <div id="list"><div class="drop-indicator" id="dropIndicator"></div></div>
+      </div>
+      <div id="detail-pane">
+        <div class="empty" id="detail-empty">点击左侧条目查看配置</div>
+      </div>
     </div>
     <div class="pa">
       <button class="ghost" id="cancel">取消</button>
@@ -100,18 +105,18 @@
   const $ = (id) => document.getElementById(id)
   const toast = (msg) => { const t = $('toast'); t.textContent = msg; t.classList.add('show'); setTimeout(() => t.classList.remove('show'), 1800) }
 
-  // ---- 左栏收起/展开(收起态齿轮按钮仅图标,文字由 CSS 隐藏) ----
+  // ---- 左栏收起/展开(收起态齿轮按钮仅图标) ----
   $('collapse').addEventListener('click', () => {
     $('left').classList.toggle('collapsed')
     $('collapse').textContent = $('left').classList.contains('collapsed') ? '▶' : '◀'
   })
 
-  // ---- 弹窗(模拟 __uiTools__.pluginModal({title, content: renderFn, actions})) ----
-  const openDialog = () => { $('mask').classList.add('show'); renderList() }
+  // ---- 弹窗(模拟 __uiTools__.pluginModal) ----
+  const openDialog = () => { $('mask').classList.add('show'); renderList(); renderDetail() }
   const closeDialog = () => { $('mask').classList.remove('show') }
   $('gear').addEventListener('click', openDialog)
   $('close').addEventListener('click', closeDialog)
-  $('cancel').addEventListener('click', () => { openId = null; closeDialog() })
+  $('cancel').addEventListener('click', () => { selected = null; closeDialog() })
 
   // ---- 控件(按 config 运行时值类型) ----
   function control(id, key, value, onChange) {
@@ -137,13 +142,13 @@
     return wrap
   }
 
-  // ---- 基础单渲染 + transform 拖拽排序(参考 deepseek_html 实时视觉) ----
+  // ---- 左侧条目列表(固定高度 + transform 拖拽排序) ----
   const container = $('list')
   const dropIndicator = $('dropIndicator')
   let order = ENTRIES.map((_, i) => i)   // order[pos] = 数据索引
-  let openId = null
-  let items = [];                         // 当前 DOM 条目(与 ENTRIES 索引一致)
-  const STEP = 54                         // 46(头部) + 8(gap)
+  let selected = null                     // 当前选中条目数据索引
+  let items = []
+  const STEP = 54                         // 46(固定行高) + 8(gap),条目高度恒定 → 无重叠
   let isDragging = false
   let dragIndex = -1
   let dragStartMouseY = 0
@@ -155,32 +160,37 @@
     container.appendChild(dropIndicator)
     items = ENTRIES.map((e, i) => {
       const box = document.createElement('div')
-      box.className = 'entry' + (openId === i ? ' open' : '')
+      box.className = 'entry' + (selected === i ? ' selected' : '')
       box.dataset.index = i
-      // 头部
       const head = document.createElement('div'); head.className = 'head'
       const drag = document.createElement('span'); drag.className = 'drag'; drag.textContent = '⋮⋮'; head.appendChild(drag)
       const name = document.createElement('span'); name.className = 'name'; name.textContent = e.name; head.appendChild(name)
-      const caret = document.createElement('button'); caret.className = 'caret'; caret.textContent = openId === i ? '▾' : '▸'
-      caret.addEventListener('click', () => { openId = openId === i ? null : i; renderList() })
-      head.appendChild(caret)
       box.appendChild(head)
-      // 展开详情(插件 ID + 配置控件)
-      const detail = document.createElement('div'); detail.className = 'detail'
-      const idLine = document.createElement('div'); idLine.style.cssText = 'color:#94a3b8;margin-bottom:8px;'
-      idLine.textContent = '插件 ID: ' + e.id; detail.appendChild(idLine)
-      if (e.config && typeof e.config === 'object') {
-        for (const key of Object.keys(e.config)) {
-          detail.appendChild(control(i, key, e.config[key], (k, v) => { e.config[k] = v }))
-        }
-      } else {
-        const span = document.createElement('span'); span.className = 'none'; span.textContent = '无配置'; detail.appendChild(span)
-      }
-      box.appendChild(detail)
+      box.addEventListener('click', () => { selected = selected === i ? null : i; renderList(); renderDetail() })
       container.appendChild(box)
       return box
     })
     updateAllPositions(false)
+  }
+
+  // ---- 右侧详情面板(条目本身不变化,配置显示在此) ----
+  function renderDetail() {
+    const pane = $('detail-pane')
+    pane.innerHTML = ''
+    if (selected === null) {
+      const empty = document.createElement('div'); empty.className = 'empty'; empty.textContent = '点击左侧条目查看配置'
+      pane.appendChild(empty); return
+    }
+    const e = ENTRIES[selected]
+    const name = document.createElement('div'); name.className = 'd-name'; name.textContent = e.name; pane.appendChild(name)
+    const idLine = document.createElement('div'); idLine.className = 'd-id'; idLine.textContent = '插件 ID: ' + e.id; pane.appendChild(idLine)
+    if (e.config && typeof e.config === 'object') {
+      for (const key of Object.keys(e.config)) {
+        pane.appendChild(control(selected, key, e.config[key], (k, v) => { e.config[k] = v }))
+      }
+    } else {
+      const span = document.createElement('span'); span.className = 'none'; span.textContent = '无配置'; pane.appendChild(span)
+    }
   }
 
   function posOf(dataIndex) { return order.indexOf(dataIndex) }
@@ -218,8 +228,6 @@
   }
 
   function startDrag(index, mouseY) {
-    // 拖拽前自动收起展开条目,保证固定 step 视觉正确
-    if (openId !== null) { openId = null; renderList() }
     isDragging = true
     dragIndex = index
     dragStartMouseY = mouseY
@@ -249,7 +257,6 @@
     if (!head) return
     const box = head.closest('.entry')
     const idx = parseInt(box.dataset.index, 10)
-    if (e.target.closest('.caret')) return   // 点击展开箭头不触发拖拽
     startDrag(idx, e.clientY)
     e.preventDefault()
   })
