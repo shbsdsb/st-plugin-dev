@@ -247,30 +247,37 @@
 
   function endDrag() {
     if (!isDragging) return
+    if (animFrame) { cancelAnimationFrame(animFrame); animFrame = null }
+    // 立即停止拖拽跟随:松手后鼠标继续移动不得再驱动 moveDrag
+    isDragging = false
     const el = items[dragIndex]
-    const targetTop = topAt(order.indexOf(dragIndex))
+    const idx = dragIndex
+    const finalTop = topAt(order.indexOf(idx))
     const currentTop = parseFloat(el.style.top) || 0
     const m = /translateY\(([-\d.]+)px/.exec(el.style.transform)
     const dy = m ? parseFloat(m[1]) : 0
-    // 落盘:先把条目视觉锚定在鼠标当前位置(不跳变)——
-    // top 设为目标值,transform 补偿「当前视觉位置 → 目标」的剩余偏移,
-    // 再由 transition 平滑滑到目标位置。
     dropIndicator.classList.remove('visible')
-    el.style.transition = 'top .28s cubic-bezier(.22,.61,.36,1), transform .28s cubic-bezier(.22,.61,.36,1)'
-    el.style.top = targetTop + 'px'
-    el.style.transform = `translateY(${currentTop + dy - targetTop}px)`
-    requestAnimationFrame(() => {
-      el.style.transform = ''
-      setTimeout(() => {
-        el.classList.remove('dragging')
-        el.style.transition = ''
-        el.style.zIndex = ''
-        isDragging = false
-        dragIndex = -1
-        currentTargetPos = -1
-        layout()
-      }, 300)
-    })
+    // 落盘:禁用过渡 → 锚定在鼠标当前位置(top=目标,transform 补偿偏移,视觉不跳)
+    // → 强制 reflow → 仅 transform 过渡,从鼠标位置平滑滑到最终位置
+    el.style.transition = 'none'
+    el.style.top = finalTop + 'px'
+    el.style.transform = `translateY(${currentTop + dy - finalTop}px)`
+    el.getBoundingClientRect()
+    el.style.transition = 'transform .32s cubic-bezier(.34,1.56,.64,1)'
+    el.style.transform = ''
+    let cleaned = false
+    const cleanup = () => {
+      if (cleaned) return
+      cleaned = true
+      el.classList.remove('dragging')
+      el.style.transition = ''
+      el.style.zIndex = ''
+      currentTargetPos = -1
+      dragIndex = -1
+      layout()
+    }
+    el.addEventListener('transitionend', cleanup, { once: true })
+    setTimeout(cleanup, 400)   // 兜底:transform 无变化(补偿为 0)时 transitionend 不触发
   }
 
   container.addEventListener('mousedown', (e) => {
