@@ -53,6 +53,8 @@ describe('loader v3 工厂化', () => {
     expect(src).toContain('immed')
     expect(src).toContain('模块未注册')
     expect(src).toContain('bootstrap')
+    // node: 内置模块浏览器空实现预置
+    expect(src).toContain("'node:fs', 'node:fs/promises', 'node:path', 'node:url'")
   })
 
   it('executeCjs:工厂源码经 new Function 执行,require 注入', () => {
