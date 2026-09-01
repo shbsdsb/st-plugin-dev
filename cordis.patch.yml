@@ -1,0 +1,4 @@
+# plugin-setting bundle patch(insert 语法声明条目)
+- insert:
+  - name: plugin-setting
+    id: plugin-setting

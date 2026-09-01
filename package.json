@@ -1,0 +1,36 @@
+{
+  "name": "plugin-setting",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "插件设置:前端齿轮按钮 + 弹窗配置基础单,后端写 profile 级 cordis.patch.yml",
+  "main": "lib/index.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json && node ../../agent_plugin_feat/bootstrap/src/cli/index.ts web-build --cwd .",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "cordis": "file:../../agent_plugin_feat/vendor/cordis",
+    "js-yaml": "^4.1.0"
+  },
+  "devDependencies": {
+    "@types/js-yaml": "^4.0.9",
+    "@types/node": "^22.10.0",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "typescript": "^5.7.3",
+    "vitest": "^4.1.11"
+  },
+  "st": {
+    "bundle": { "patch": "./cordis.patch.yml" },
+    "client": {
+      "kind": "web",
+      "path": "lib/index.cjs",
+      "immed": true,
+      "inject": ["ui-tool-plugin", "st-ui-slots"]
+    }
+  }
+}
