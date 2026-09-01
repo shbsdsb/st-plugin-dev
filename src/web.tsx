@@ -1,7 +1,7 @@
 // agent_plugin_dev/ui-tool-plugin/src/web.tsx
 // WebPlugin:挂载 window.__uiTools__(13 种玻璃拟态工具 + theme 主题引擎);
 // mount 经 theme-engine 注入内置白色玻璃主题;unmount 清场(关闭浮层 + 卸载主题 + 删除 API)。
-import { createTools, closeAllTools, type Tools } from './tools.ts'
+import { createTools, closeAllTools, removeToolsStyle, type Tools } from './tools.ts'
 import { createThemeEngine, type ThemeEngine } from './theme-engine.ts'
 
 export interface UiTools extends Tools {
@@ -34,8 +34,9 @@ export default {
     }
   },
   unmount() {
-    // 关闭全部活动浮层
+    // 关闭全部活动浮层 + 清理定时器 + 移除工具基础样式
     closeAllTools()
+    removeToolsStyle()
     // 卸载主题(内置 + install 残留)
     const ui = (window as unknown as { __uiTools__?: UiTools }).__uiTools__
     ui?.theme.destroy()
