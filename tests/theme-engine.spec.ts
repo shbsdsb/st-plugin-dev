@@ -78,8 +78,11 @@ describe('createThemeEngine', () => {
     expect(style?.textContent).toContain('color:red')
     // html 注入 body(host 节点 id)
     expect(bodyChildren.some((c) => c.id === 'ui-tool-plugin-install-html')).toBe(true)
+    // js 注入 script 节点
+    expect(bodyChildren.some((c) => c.id === 'ui-tool-plugin-install-js')).toBe(true)
     engine.reset()
     expect(engine.get()).toEqual(DEFAULT_THEME)
     expect(headChildren.find((c) => c.id === 'ui-tool-plugin-install')).toBeUndefined()
+    expect(bodyChildren.some((c) => c.id === 'ui-tool-plugin-install-js')).toBe(false)
   })
 })
