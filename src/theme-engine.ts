@@ -7,7 +7,7 @@ const STYLE_ID = 'ui-tool-plugin-theme'
 const INSTALL_STYLE_ID = 'ui-tool-plugin-install'
 const INSTALL_HTML_ID = 'ui-tool-plugin-install-html'
 const INSTALL_JS_ID = 'ui-tool-plugin-install-js'
-const ORB_CLS = 'ui-tool-plugin-orb'
+const ORB_CLS = 'st-beautify-orb' // 与 theme.ts buildThemeCss 的定位 CSS 一致(.st-beautify-orb[data-index])
 
 export interface ThemeEngine {
   get(): ThemeOptions
@@ -30,7 +30,7 @@ function applyTheme(opts: ThemeOptions): void {
   for (let i = 0; i < normalizeOrbCount(opts.orbCount); i++) {
     const orb = document.createElement('div')
     orb.className = ORB_CLS
-    orb.style.cssText = 'position:fixed;border-radius:50%;filter:blur(100px);pointer-events:none;z-index:0;'
+    orb.setAttribute('data-index', String(i))
     document.body.appendChild(orb)
   }
 }

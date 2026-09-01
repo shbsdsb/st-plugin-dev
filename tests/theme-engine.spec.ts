@@ -4,7 +4,7 @@ import { createThemeEngine } from '../src/theme-engine.ts'
 import { DEFAULT_THEME } from '../src/theme.ts'
 
 const headChildren: Array<{ id: string; textContent: string; tag: string }> = []
-const bodyChildren: Array<{ id: string; tag: string; textContent: string }> = []
+const bodyChildren: Array<{ id: string; tag: string; textContent: string; className: string; dataIndex: string }> = []
 
 globalThis.document = {
   head: {
@@ -13,8 +13,11 @@ globalThis.document = {
     },
   },
   body: {
-    appendChild(el: { tagName: string; id?: string; textContent?: string; className?: string }) {
-      bodyChildren.push({ tag: el.tagName, id: el.id ?? '', textContent: el.textContent ?? '', })
+    appendChild(el: { tagName: string; id?: string; textContent?: string; className?: string; dataIndex?: string }) {
+      bodyChildren.push({
+        tag: el.tagName, id: el.id ?? '', textContent: el.textContent ?? '',
+        className: el.className ?? '', dataIndex: el.dataIndex ?? '',
+      })
     },
   },
   getElementById(id: string) {
@@ -25,13 +28,16 @@ globalThis.document = {
     return null
   },
   querySelectorAll(sel: string) {
-    // 光球按 class 匹配(简化:返回 body 中 className 含 sel 的节点)
-    return []
+    const cls = sel.startsWith('.') ? sel.slice(1) : sel
+    return bodyChildren
+      .filter((c) => c.className.includes(cls))
+      .map((c) => ({ ...c, remove: () => { const i = bodyChildren.indexOf(c); if (i >= 0) bodyChildren.splice(i, 1) } }))
   },
   createElement(tag: string) {
     return {
-      tagName: tag, id: '', textContent: '', className: '', style: {},
-      setAttribute() {}, appendChild() {}, remove() {},
+      tagName: tag, id: '', textContent: '', className: '', style: {}, dataIndex: '',
+      setAttribute(k: string, v: string) { (this as Record<string, string>)[k] = v },
+      appendChild() {}, remove() {},
     }
   },
 } as never
@@ -44,12 +50,20 @@ describe('createThemeEngine', () => {
     expect(engine.get()).toEqual(DEFAULT_THEME)
   })
 
-  it('set 局部更新并重建样式(含新 accent)', () => {
+  it('set 局部更新并重建样式(含新 accent),默认 3 个光球', () => {
     engine.set({ accent: '#0ea5e9' })
     expect(engine.get().accent).toBe('#0ea5e9')
     expect(engine.get().blur).toBe(DEFAULT_THEME.blur)
     const style = headChildren.find((c) => c.id === 'ui-tool-plugin-theme')
     expect(style?.textContent).toContain('#0ea5e9')
+    const orbs = document.querySelectorAll('.st-beautify-orb')
+    expect(orbs.length).toBe(3)
+  })
+
+  it('set 覆盖 orbCount 后光球数量跟随', () => {
+    engine.set({ orbCount: 2 })
+    expect(document.querySelectorAll('.st-beautify-orb').length).toBe(2)
+    engine.reset()
   })
 
   it('reset 恢复默认主题', () => {
