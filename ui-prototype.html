@@ -247,14 +247,30 @@
 
   function endDrag() {
     if (!isDragging) return
-    isDragging = false
     const el = items[dragIndex]
-    el.classList.remove('dragging')
-    el.style.zIndex = ''
-    el.style.transform = ''
-    layout()
-    dragIndex = -1
-    currentTargetPos = -1
+    const targetTop = topAt(order.indexOf(dragIndex))
+    const currentTop = parseFloat(el.style.top) || 0
+    const m = /translateY\(([-\d.]+)px/.exec(el.style.transform)
+    const dy = m ? parseFloat(m[1]) : 0
+    // 落盘:先把条目视觉锚定在鼠标当前位置(不跳变)——
+    // top 设为目标值,transform 补偿「当前视觉位置 → 目标」的剩余偏移,
+    // 再由 transition 平滑滑到目标位置。
+    dropIndicator.classList.remove('visible')
+    el.style.transition = 'top .28s cubic-bezier(.22,.61,.36,1), transform .28s cubic-bezier(.22,.61,.36,1)'
+    el.style.top = targetTop + 'px'
+    el.style.transform = `translateY(${currentTop + dy - targetTop}px)`
+    requestAnimationFrame(() => {
+      el.style.transform = ''
+      setTimeout(() => {
+        el.classList.remove('dragging')
+        el.style.transition = ''
+        el.style.zIndex = ''
+        isDragging = false
+        dragIndex = -1
+        currentTargetPos = -1
+        layout()
+      }, 300)
+    })
   }
 
   container.addEventListener('mousedown', (e) => {
