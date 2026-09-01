@@ -296,13 +296,15 @@ function controlField(st: DialogState, index: number, key: string, value: unknow
     input.checked = value as boolean
     input.addEventListener('change', () => onChange(input.checked))
     wrap.appendChild(input)
-  } else if (type === 'object' || type === 'array') {
-    const ta = document.createElement('textarea')
-    ta.value = JSON.stringify(value, null, 2)
-    ta.addEventListener('change', () => {
-      try { onChange(JSON.parse(ta.value)) } catch { /* 非法 JSON 保持原值 */ }
-    })
-    wrap.appendChild(ta)
+  } else if (type === 'array') {
+    // 数组元素全为 string → 多行输入(每行一个,含新建/删除);否则 JSON 文本域
+    if (Array.isArray(value) && isStringArray(value)) {
+      wrap.appendChild(stringListField(onChange, [...(value as string[])]))
+    } else {
+      wrap.appendChild(jsonField(value, onChange))
+    }
+  } else if (type === 'object') {
+    wrap.appendChild(jsonField(value, onChange))
   } else {
     const span = document.createElement('span')
     span.className = 'ps-none'
@@ -310,6 +312,53 @@ function controlField(st: DialogState, index: number, key: string, value: unknow
     wrap.appendChild(span)
   }
   return wrap
+}
+
+/** 判断数组元素是否全为 string(用于多行输入 vs JSON 文本域) */
+export function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((x) => typeof x === 'string')
+}
+
+/** JSON 文本域(嵌套 object / 非字符串数组) */
+function jsonField(value: unknown, onChange: (v: unknown) => void): HTMLTextAreaElement {
+  const ta = document.createElement('textarea')
+  ta.value = JSON.stringify(value, null, 2)
+  ta.addEventListener('change', () => {
+    try { onChange(JSON.parse(ta.value)) } catch { /* 非法 JSON 保持原值 */ }
+  })
+  return ta
+}
+
+/** 字符串数组多行输入:每行一个 input + 垃圾桶删除,底部新建按钮 */
+function stringListField(onChange: (v: unknown) => void, initial: string[]): HTMLElement {
+  const container = document.createElement('div')
+  container.style.cssText = 'flex:1;display:flex;flex-direction:column;gap:6px;min-width:0;'
+  const render = (): void => {
+    container.innerHTML = ''
+    initial.forEach((item, i) => {
+      const row = document.createElement('div')
+      row.style.cssText = 'display:flex;align-items:center;gap:6px;'
+      const input = document.createElement('input')
+      input.type = 'text'
+      input.value = item
+      input.style.cssText = 'flex:1;padding:5px 8px;border:1px solid rgba(148,163,184,.5);border-radius:8px;font-size:12px;color:#1f2d3d;min-width:0;'
+      input.addEventListener('input', () => { initial[i] = input.value; onChange([...initial]) })
+      const del = document.createElement('button')
+      del.textContent = '🗑'
+      del.title = '删除'
+      del.style.cssText = 'width:26px;height:26px;border:none;background:none;cursor:pointer;font-size:13px;color:#dc2626;flex-shrink:0;display:flex;align-items:center;justify-content:center;'
+      del.addEventListener('click', () => { initial.splice(i, 1); onChange([...initial]); render() })
+      row.append(input, del)
+      container.appendChild(row)
+    })
+    const add = document.createElement('button')
+    add.textContent = '＋ 新建'
+    add.style.cssText = 'align-self:flex-start;border:1px dashed rgba(148,163,184,.5);background:none;border-radius:8px;padding:4px 10px;cursor:pointer;font-size:12px;color:#7c6df6;'
+    add.addEventListener('click', () => { initial.push(''); onChange([...initial]); render() })
+    container.appendChild(add)
+  }
+  render()
+  return container
 }
 
 // ---- 拖拽:动态高度 + 绝对定位 + transform 落盘动画(v4.2 已验证逻辑) ----
@@ -387,32 +436,18 @@ function endDrag(st: DialogState): void {
   // 立即停止拖拽跟随:松手后鼠标继续移动不得再驱动 moveDrag
   st.isDragging = false
   const el = st.items[st.dragIndex]
-  if (!el) return
+  if (!el) { st.currentTarget = -1; st.dragIndex = -1; return }
   const finalTop = topAt(st, st.order.indexOf(st.dragIndex))
-  const currentTop = parseFloat(el.style.top) || 0
-  const m = /translateY\(([-\d.]+)px/.exec(el.style.transform)
-  const dy = m ? parseFloat(m[1]) : 0
   st.drop?.classList.remove('ps-visible')
-  // 落盘:禁用过渡 → 锚定鼠标位置(top=目标,transform 补偿) → 强制 reflow → transform 过渡归位
+  // 落位:禁用过渡,松手瞬间条目即到目标位置(无 0.1s+ 延迟落盘)
   el.style.transition = 'none'
   el.style.top = finalTop + 'px'
-  el.style.transform = `translateY(${currentTop + dy - finalTop}px)`
-  el.getBoundingClientRect()
-  el.style.transition = 'transform .32s cubic-bezier(.34,1.56,.64,1)'
   el.style.transform = ''
-  let cleaned = false
-  const cleanup = (): void => {
-    if (cleaned) return
-    cleaned = true
-    el.classList.remove('ps-dragging')
-    el.style.transition = ''
-    el.style.zIndex = ''
-    st.currentTarget = -1
-    st.dragIndex = -1
-    layout(st)
-  }
-  el.addEventListener('transitionend', cleanup, { once: true })
-  setTimeout(cleanup, 400)
+  el.style.zIndex = ''
+  el.classList.remove('ps-dragging')
+  st.currentTarget = -1
+  st.dragIndex = -1
+  layout(st)
 }
 
 // ---- 保存(经 host exact 路由 PUT /api/setting/save) ----

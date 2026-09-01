@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
-import plugin, { openDialog, inferControlType, buildSavePayload } from '../src/web.tsx'
+import plugin, { openDialog, inferControlType, buildSavePayload, isStringArray } from '../src/web.tsx'
 
 type SlotContent = { name: string; render: (el: unknown) => void; collapsedRender?: (el: unknown) => void; unmount?: () => void }
 const registered: Array<{ slot: string; content: SlotContent }> = []
@@ -52,6 +52,16 @@ describe('buildSavePayload', () => {
   it('提交完整 config(整行替换,首次修改全量复制)', () => {
     const entries = [{ id: 'host', config: { port: 9090 } }]
     expect(buildSavePayload(entries)).toEqual({ entries })
+  })
+})
+
+describe('isStringArray', () => {
+  it('数组元素全为 string → true(走多行输入);否则 false(走 JSON 文本域)', () => {
+    expect(isStringArray(['127.0.0.1', '0.0.0.0'])).toBe(true)
+    expect(isStringArray([])).toBe(true)
+    expect(isStringArray(['a', 1])).toBe(false)
+    expect(isStringArray({ a: 1 })).toBe(false)
+    expect(isStringArray('x')).toBe(false)
   })
 })
 
