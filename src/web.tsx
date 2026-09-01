@@ -1,0 +1,454 @@
+// agent_plugin_dev/plugin-setting/src/web.tsx
+// 前端 WebPlugin:sidebar-left 齿轮按钮(展开左对齐 / 收起仅图标)→ __uiTools__.pluginModal 设置弹窗。
+// 弹窗内容纯 DOM 渲染(交互移植自 ui-prototype.html v4.2,已人工确认)。
+// 前后端通信路由:GET/PUT 精确匹配 host webServer.register 注册的 exact 路径(/api/setting/list、/api/setting/save)。
+export interface SettingEntry { id: string; name: string; config?: unknown }
+
+export type ControlType = 'string' | 'number' | 'boolean' | 'object' | 'array' | 'null'
+
+/** 按 config 运行时值类型推断控件类型(纯函数,供测试) */
+export function inferControlType(value: unknown): ControlType {
+  if (value === null || value === undefined) return 'null'
+  if (Array.isArray(value)) return 'array'
+  switch (typeof value) {
+    case 'string': return 'string'
+    case 'number': return 'number'
+    case 'boolean': return 'boolean'
+    default: return 'object'
+  }
+}
+
+/** 组装保存 payload:提交完整 config(整行替换语义,首次修改全量复制) */
+export function buildSavePayload(entries: Array<{ id: string; config: unknown }>): { entries: Array<{ id: string; config: unknown }> } {
+  return { entries }
+}
+
+type UiSlots = {
+  register(slot: string, content: { name: string; render: (el: HTMLElement) => void; collapsedRender?: (el: HTMLElement) => void; unmount?: () => void }): void
+  unregister(slot: string, name: string): void
+}
+type UiTools = {
+  pluginModal(opts: { title?: string; content: string | ((el: HTMLElement) => void) | HTMLElement; actions?: Array<{ label: string; variant?: 'primary' | 'secondary' | 'danger'; onClick?: () => void }>; width?: number }): void
+  toast(msg: string, opts?: { icon?: string }): void
+}
+function uiSlots(): UiSlots | undefined {
+  return (window as unknown as { __uiSlots__?: UiSlots }).__uiSlots__
+}
+function uiTools(): UiTools | undefined {
+  return (window as unknown as { __uiTools__?: UiTools }).__uiTools__
+}
+
+const STYLE_ID = 'plugin-setting-style'
+const GAP = 8
+
+/** 注入弹窗/齿轮/拖拽样式(ps- 前缀,避免污染宿主) */
+function ensureStyle(): void {
+  if (document.getElementById(STYLE_ID)) return
+  const style = document.createElement('style')
+  style.id = STYLE_ID
+  style.textContent = `
+.st-setting-btn{display:flex;align-items:center;gap:8px;width:100%;justify-content:flex-start;padding:6px 10px;border:none;background:none;cursor:pointer;color:#475569;font-size:13px;border-radius:8px;}
+.st-setting-btn:hover{background:rgba(124,109,246,.08);}
+.st-setting-btn .ps-ic{font-size:15px;}
+.st-setting-btn.ps-compact{justify-content:center;padding:6px 0;width:32px;height:32px;border-radius:50%;background:rgba(124,109,246,.14);color:#7c6df6;font-size:15px;}
+.ps-dialog{height:62vh;min-height:360px;display:flex;flex-direction:column;font-size:13px;color:#334155;line-height:1.7;}
+.ps-hint{font-size:11px;color:#94a3b8;margin-bottom:8px;}
+.ps-list{position:relative;flex:1;min-height:0;}
+.ps-entry{position:absolute;left:0;right:0;border:1px solid rgba(148,163,184,.35);border-radius:12px;background:rgba(255,255,255,.85);will-change:top;transition:top .3s cubic-bezier(.22,.61,.36,1),box-shadow .2s ease,border-color .2s ease;}
+.ps-head{display:flex;align-items:center;gap:8px;height:46px;padding:0 12px;cursor:grab;user-select:none;}
+.ps-drag{color:#cbd5e1;cursor:grab;font-size:14px;}
+.ps-name{flex:1;font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#334155;}
+.ps-caret{border:none;background:none;cursor:pointer;color:#64748b;font-size:13px;}
+.ps-detail{border-top:1px dashed rgba(148,163,184,.4);padding:12px;font-size:12px;display:none;background:rgba(248,250,252,.6);border-radius:0 0 12px 12px;}
+.ps-entry.ps-open .ps-detail{display:block;}
+.ps-entry.ps-dragging{z-index:100;box-shadow:0 12px 40px rgba(31,38,135,.25);border-color:rgba(124,109,246,.6);cursor:grabbing;transition:box-shadow .2s ease,border-color .2s ease;}
+.ps-entry.ps-dragging .ps-drag{color:#7c6df6;}
+.ps-drop-indicator{position:absolute;left:8px;right:8px;height:3px;border-radius:3px;background:#7c6df6;opacity:0;transition:opacity .15s ease;pointer-events:none;box-shadow:0 0 10px rgba(124,109,246,.5);z-index:101;}
+.ps-drop-indicator.ps-visible{opacity:1;}
+.ps-field{display:flex;align-items:center;gap:8px;margin-bottom:8px;}
+.ps-field label{width:110px;flex-shrink:0;color:#475569;}
+.ps-field input[type=text],.ps-field input[type=number]{flex:1;padding:6px 8px;border:1px solid rgba(148,163,184,.5);border-radius:8px;font-size:13px;color:#1f2d3d;}
+.ps-field textarea{flex:1;min-height:80px;padding:6px 8px;border:1px solid rgba(148,163,184,.5);border-radius:8px;font-family:monospace;font-size:12px;color:#1f2d3d;}
+.ps-none{color:#94a3b8;}
+.ps-error{color:#dc2626;font-size:13px;padding:16px;}
+.ps-loading{color:#94a3b8;font-size:13px;padding:16px;}
+`
+  document.head.appendChild(style)
+}
+
+/** 齿轮按钮:compact=true 为收起态(40px 窄条,仅图标) */
+function makeGearButton(compact: boolean, onClick: () => void): HTMLElement {
+  const btn = document.createElement('button')
+  btn.className = compact ? 'st-setting-btn ps-compact' : 'st-setting-btn'
+  btn.title = '插件设置'
+  const ic = document.createElement('span')
+  ic.className = 'ps-ic'
+  ic.textContent = '⚙'
+  btn.appendChild(ic)
+  if (!compact) {
+    const label = document.createElement('span')
+    label.textContent = '插件设置'
+    btn.appendChild(label)
+  }
+  btn.addEventListener('click', onClick)
+  return btn
+}
+
+// ---- 弹窗状态(闭包,content 渲染与 actions 共享) ----
+interface DialogState {
+  entries: SettingEntry[]
+  order: number[]
+  openId: number | null
+  items: HTMLElement[]
+  container: HTMLElement | null
+  drop: HTMLElement | null
+  isDragging: boolean
+  dragIndex: number
+  dragStartY: number
+  currentTarget: number
+  animFrame: number | null
+}
+
+export function openDialog(): void {
+  const tools = uiTools()
+  if (!tools) {
+    console.warn('[plugin-setting] __uiTools__ 不可用,设置弹窗不可用')
+    return
+  }
+  ensureStyle()
+  const st: DialogState = {
+    entries: [], order: [], openId: null, items: [], container: null, drop: null,
+    isDragging: false, dragIndex: -1, dragStartY: 0, currentTarget: -1, animFrame: null,
+  }
+  tools.pluginModal({
+    title: '插件设置',
+    width: 760,
+    content: (el) => renderDialogContent(el, st),
+    actions: [
+      { label: '取消' },
+      { label: '保存', variant: 'primary', onClick: () => void save(st, tools) },
+    ],
+  })
+}
+
+/** 渲染弹窗内容(固定高度,内部滚动;列表 + 拖拽) */
+function renderDialogContent(root: HTMLElement, st: DialogState): void {
+  const wrap = document.createElement('div')
+  wrap.className = 'ps-dialog'
+  const hint = document.createElement('p')
+  hint.className = 'ps-hint'
+  hint.textContent = '✨ 拖拽排序:展开的条目按实际高度让位,不重叠'
+  const container = document.createElement('div')
+  container.className = 'ps-list'
+  const drop = document.createElement('div')
+  drop.className = 'ps-drop-indicator'
+  container.appendChild(drop)
+  st.container = container
+  st.drop = drop
+  wrap.append(hint, container)
+  root.appendChild(wrap)
+
+  // 加载生效表
+  const loading = document.createElement('div')
+  loading.className = 'ps-loading'
+  loading.textContent = '加载中…'
+  container.appendChild(loading)
+  fetch('/api/setting/list')
+    .then((r) => r.json() as Promise<{ ok: boolean; entries?: SettingEntry[]; error?: string }>)
+    .then((data) => {
+      loading.remove()
+      if (!data.ok || !data.entries) {
+        const err = document.createElement('div')
+        err.className = 'ps-error'
+        err.textContent = data.error ?? '加载失败'
+        container.appendChild(err)
+        return
+      }
+      st.entries = data.entries
+      st.order = data.entries.map((_, i) => i)
+      renderList(st)
+    })
+    .catch(() => {
+      loading.remove()
+      const err = document.createElement('div')
+      err.className = 'ps-error'
+      err.textContent = '无法连接设置服务,请先 st host go'
+      container.appendChild(err)
+    })
+
+  // 拖拽事件:container mousedown 开始,document 全局移动/释放
+  container.addEventListener('mousedown', (e) => {
+    const target = e.target as HTMLElement
+    const head = target.closest('.ps-head') as HTMLElement | null
+    if (!head || !st.container) return
+    if (target.closest('.ps-caret')) return
+    const box = head.closest('.ps-entry') as HTMLElement | null
+    if (!box) return
+    startDrag(st, parseInt(box.dataset.index ?? '-1', 10), e.clientY)
+    e.preventDefault()
+  })
+  document.addEventListener('mousemove', (e) => { if (st.isDragging) moveDrag(st, e.clientY) })
+  document.addEventListener('mouseup', () => { if (st.isDragging) endDrag(st) })
+  container.addEventListener('dragstart', (e) => e.preventDefault())
+}
+
+// ---- 列表渲染(绝对定位 + 动态高度) ----
+function renderList(st: DialogState): void {
+  const container = st.container
+  if (!container) return
+  container.innerHTML = ''
+  const drop = document.createElement('div')
+  drop.className = 'ps-drop-indicator'
+  container.appendChild(drop)
+  st.drop = drop
+  st.items = st.entries.map((e, i) => {
+    const box = document.createElement('div')
+    box.className = 'ps-entry' + (st.openId === i ? ' ps-open' : '')
+    box.dataset.index = String(i)
+    const head = document.createElement('div')
+    head.className = 'ps-head'
+    const drag = document.createElement('span')
+    drag.className = 'ps-drag'
+    drag.textContent = '⋮⋮'
+    const name = document.createElement('span')
+    name.className = 'ps-name'
+    name.textContent = e.name
+    const caret = document.createElement('button')
+    caret.className = 'ps-caret'
+    caret.textContent = st.openId === i ? '▾' : '▸'
+    caret.addEventListener('click', (ev) => {
+      ev.stopPropagation()
+      st.openId = st.openId === i ? null : i
+      renderList(st)
+    })
+    head.append(drag, name, caret)
+    box.appendChild(head)
+    // 展开详情:插件 ID + 配置控件
+    const detail = document.createElement('div')
+    detail.className = 'ps-detail'
+    const idLine = document.createElement('div')
+    idLine.style.cssText = 'color:#94a3b8;margin-bottom:8px;'
+    idLine.textContent = '插件 ID: ' + e.id
+    detail.appendChild(idLine)
+    if (e.config && typeof e.config === 'object') {
+      for (const key of Object.keys(e.config as Record<string, unknown>)) {
+        detail.appendChild(controlField(st, i, key, (e.config as Record<string, unknown>)[key]))
+      }
+    } else {
+      const span = document.createElement('span')
+      span.className = 'ps-none'
+      span.textContent = '无配置'
+      detail.appendChild(span)
+    }
+    box.appendChild(detail)
+    container.appendChild(box)
+    return box
+  })
+  layout(st)
+}
+
+/** 控件(按 config 运行时值类型) */
+function controlField(st: DialogState, index: number, key: string, value: unknown): HTMLElement {
+  const wrap = document.createElement('div')
+  wrap.className = 'ps-field'
+  const label = document.createElement('label')
+  label.textContent = key
+  wrap.appendChild(label)
+  const onChange = (v: unknown): void => {
+    const entry = st.entries[index]
+    const cfg = entry.config && typeof entry.config === 'object' ? { ...(entry.config as Record<string, unknown>) } : {}
+    ;(cfg as Record<string, unknown>)[key] = v
+    entry.config = cfg
+  }
+  const type = inferControlType(value)
+  if (type === 'string') {
+    const input = document.createElement('input')
+    input.type = 'text'
+    input.value = value as string
+    input.addEventListener('input', () => onChange(input.value))
+    wrap.appendChild(input)
+  } else if (type === 'number') {
+    const input = document.createElement('input')
+    input.type = 'number'
+    input.value = String(value)
+    input.addEventListener('input', () => onChange(Number(input.value)))
+    wrap.appendChild(input)
+  } else if (type === 'boolean') {
+    const input = document.createElement('input')
+    input.type = 'checkbox'
+    input.checked = value as boolean
+    input.addEventListener('change', () => onChange(input.checked))
+    wrap.appendChild(input)
+  } else if (type === 'object' || type === 'array') {
+    const ta = document.createElement('textarea')
+    ta.value = JSON.stringify(value, null, 2)
+    ta.addEventListener('change', () => {
+      try { onChange(JSON.parse(ta.value)) } catch { /* 非法 JSON 保持原值 */ }
+    })
+    wrap.appendChild(ta)
+  } else {
+    const span = document.createElement('span')
+    span.className = 'ps-none'
+    span.textContent = '无配置'
+    wrap.appendChild(span)
+  }
+  return wrap
+}
+
+// ---- 拖拽:动态高度 + 绝对定位 + transform 落盘动画(v4.2 已验证逻辑) ----
+function heightOf(st: DialogState, i: number): number {
+  return (st.items[i]?.offsetHeight ?? 46) + GAP
+}
+function topAt(st: DialogState, pos: number): number {
+  let y = 0
+  for (let p = 0; p < pos; p++) y += heightOf(st, st.order[p])
+  return y
+}
+function layout(st: DialogState): void {
+  const container = st.container
+  if (!container) return
+  let y = 0
+  for (const i of st.order) {
+    if (st.isDragging && i === st.dragIndex) continue
+    const el = st.items[i]
+    if (el) el.style.top = y + 'px'
+    y += heightOf(st, i)
+  }
+  container.style.height = Math.max(0, y - GAP) + 'px'
+  const drop = st.drop
+  if (drop) {
+    if (st.isDragging && st.currentTarget >= 0) {
+      drop.style.top = (topAt(st, st.currentTarget) - 2) + 'px'
+      drop.classList.add('ps-visible')
+    } else {
+      drop.classList.remove('ps-visible')
+    }
+  }
+}
+function updateOrder(st: DialogState, targetPos: number): void {
+  const cur = st.order.indexOf(st.dragIndex)
+  st.order.splice(cur, 1)
+  st.order.splice(targetPos, 0, st.dragIndex)
+  st.currentTarget = targetPos
+}
+function moveDrag(st: DialogState, mouseY: number): void {
+  if (st.animFrame !== null) cancelAnimationFrame(st.animFrame)
+  st.animFrame = requestAnimationFrame(() => {
+    const el = st.items[st.dragIndex]
+    if (!el || !st.container) return
+    el.style.transform = `translateY(${mouseY - st.dragStartY}px) scale(1.02)`
+    const relY = mouseY - st.container.getBoundingClientRect().top
+    const rest = st.order.filter((i) => i !== st.dragIndex)
+    let pos = rest.length
+    for (let p = 0; p < rest.length; p++) {
+      const other = st.items[rest[p]]
+      const center = parseFloat(other.style.top) + other.offsetHeight / 2
+      if (relY < center) { pos = p; break }
+    }
+    if (pos !== st.currentTarget) updateOrder(st, pos)
+    layout(st)
+  })
+}
+function startDrag(st: DialogState, index: number, mouseY: number): void {
+  st.isDragging = true
+  st.dragIndex = index
+  st.dragStartY = mouseY
+  st.currentTarget = st.order.indexOf(index)
+  const el = st.items[index]
+  el.classList.add('ps-dragging')
+  el.style.zIndex = '100'
+  el.style.transform = 'translateY(0px) scale(1.02)'
+  if (st.drop) {
+    st.drop.classList.add('ps-visible')
+    st.drop.style.top = (topAt(st, st.currentTarget) - 2) + 'px'
+  }
+  layout(st)
+}
+function endDrag(st: DialogState): void {
+  if (!st.isDragging) return
+  if (st.animFrame !== null) { cancelAnimationFrame(st.animFrame); st.animFrame = null }
+  // 立即停止拖拽跟随:松手后鼠标继续移动不得再驱动 moveDrag
+  st.isDragging = false
+  const el = st.items[st.dragIndex]
+  if (!el) return
+  const finalTop = topAt(st, st.order.indexOf(st.dragIndex))
+  const currentTop = parseFloat(el.style.top) || 0
+  const m = /translateY\(([-\d.]+)px/.exec(el.style.transform)
+  const dy = m ? parseFloat(m[1]) : 0
+  st.drop?.classList.remove('ps-visible')
+  // 落盘:禁用过渡 → 锚定鼠标位置(top=目标,transform 补偿) → 强制 reflow → transform 过渡归位
+  el.style.transition = 'none'
+  el.style.top = finalTop + 'px'
+  el.style.transform = `translateY(${currentTop + dy - finalTop}px)`
+  el.getBoundingClientRect()
+  el.style.transition = 'transform .32s cubic-bezier(.34,1.56,.64,1)'
+  el.style.transform = ''
+  let cleaned = false
+  const cleanup = (): void => {
+    if (cleaned) return
+    cleaned = true
+    el.classList.remove('ps-dragging')
+    el.style.transition = ''
+    el.style.zIndex = ''
+    st.currentTarget = -1
+    st.dragIndex = -1
+    layout(st)
+  }
+  el.addEventListener('transitionend', cleanup, { once: true })
+  setTimeout(cleanup, 400)
+}
+
+// ---- 保存(经 host exact 路由 PUT /api/setting/save) ----
+async function save(st: DialogState, tools: UiTools): Promise<void> {
+  try {
+    const payload = buildSavePayload(st.order.map((i) => ({ id: st.entries[i].id, config: st.entries[i].config ?? null })))
+    const res = await fetch('/api/setting/save', {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(payload),
+    })
+    const data = await res.json() as { ok: boolean; error?: string }
+    if (data.ok) {
+      tools.toast('已保存,配置即将生效', { icon: '✓' })
+    } else {
+      tools.toast(data.error ?? '保存失败', { icon: '⚠' })
+    }
+  } catch {
+    tools.toast('保存失败', { icon: '⚠' })
+  }
+}
+
+const plugin = {
+  name: 'plugin-setting',
+  mount(_el: HTMLElement) {
+    ensureStyle()
+    const slots = uiSlots()
+    if (!slots) {
+      console.warn('[plugin-setting] 未检测到 __uiSlots__,齿轮按钮不可用')
+      return
+    }
+    const buttons: HTMLElement[] = []
+    slots.register('sidebar-left', {
+      name: 'plugin-setting',
+      render: (el) => {
+        const btn = makeGearButton(false, openDialog)
+        buttons.push(btn)
+        el.appendChild(btn)
+      },
+      collapsedRender: (el) => {
+        const btn = makeGearButton(true, openDialog)
+        buttons.push(btn)
+        el.appendChild(btn)
+      },
+      unmount: () => {
+        for (const btn of buttons) btn.remove()
+        buttons.length = 0
+      },
+    })
+  },
+  unmount() {
+    uiSlots()?.unregister('sidebar-left', 'plugin-setting')
+  },
+}
+
+export default plugin
