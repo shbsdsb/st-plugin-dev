@@ -38,6 +38,22 @@ function uiTools(): UiTools | undefined {
   return (window as unknown as { __uiTools__?: UiTools }).__uiTools__
 }
 
+/** 当前激活弹窗状态(模块级:document 监听只绑一次,通过 activeState 定位当前弹窗) */
+let activeState: DialogState | null = null
+let dragListenersBound = false
+function ensureDragListeners(): void {
+  if (dragListenersBound) return
+  dragListenersBound = true
+  document.addEventListener('mousemove', (e) => {
+    const st = activeState
+    if (st?.isDragging) moveDrag(st, e.clientY)
+  })
+  document.addEventListener('mouseup', () => {
+    const st = activeState
+    if (st?.isDragging) endDrag(st)
+  })
+}
+
 const STYLE_ID = 'plugin-setting-style'
 const GAP = 8
 
@@ -176,6 +192,9 @@ function renderDialogContent(root: HTMLElement, st: DialogState): void {
       container.appendChild(err)
     })
 
+  // 激活当前弹窗状态并确保 document 级监听只绑定一次
+  activeState = st
+  ensureDragListeners()
   // 拖拽事件:container mousedown 开始,document 全局移动/释放
   container.addEventListener('mousedown', (e) => {
     const target = e.target as HTMLElement
@@ -187,8 +206,6 @@ function renderDialogContent(root: HTMLElement, st: DialogState): void {
     startDrag(st, parseInt(box.dataset.index ?? '-1', 10), e.clientY)
     e.preventDefault()
   })
-  document.addEventListener('mousemove', (e) => { if (st.isDragging) moveDrag(st, e.clientY) })
-  document.addEventListener('mouseup', () => { if (st.isDragging) endDrag(st) })
   container.addEventListener('dragstart', (e) => e.preventDefault())
 }
 

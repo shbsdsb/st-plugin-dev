@@ -72,7 +72,14 @@ export function apply(ctx: Context) {
     path: '/api/setting/save',
     handler: async (req, res) => {
       try {
-        const payload = JSON.parse(await readBody(req)) as { entries?: unknown }
+        const body = await readBody(req)
+        let payload: { entries?: unknown }
+        try {
+          payload = JSON.parse(body) as { entries?: unknown }
+        } catch {
+          json(res, 400, { ok: false, error: '请求体不是合法 JSON' })
+          return
+        }
         if (!Array.isArray(payload.entries)) {
           json(res, 400, { ok: false, error: 'entries 必须为数组' })
           return
@@ -85,7 +92,7 @@ export function apply(ctx: Context) {
             return
           }
           const cfg = rec.config
-          if (cfg !== undefined && cfg !== null && typeof cfg !== 'object') {
+          if (cfg !== undefined && cfg !== null && (typeof cfg !== 'object' || Array.isArray(cfg))) {
             json(res, 400, { ok: false, error: 'entry.config 必须为对象或 null' })
             return
           }
