@@ -3,6 +3,7 @@ import React from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { SlotRegistry, type SlotName } from './slots.ts'
 import { Layout } from './layout.tsx'
+import { readClientConfig } from './use-is-mobile.ts'
 
 export default {
   name: 'st-ui-slots',
@@ -14,7 +15,8 @@ export default {
       get: (slot: SlotName) => registry.get(slot),
     }
     this.root = createRoot(el)
-    this.root.render(React.createElement(Layout, { registry }))
+    const cfg = readClientConfig('st-ui-slots')
+    this.root.render(React.createElement(Layout, { registry, showCollapsedRail: cfg.showCollapsedRail }))
   },
   unmount() {
     this.root?.unmount()
