@@ -2,7 +2,7 @@
 import type { WebModuleService, ClientBootEntry } from './types.ts'
 import { buildLoaderSource } from './loader.ts'
 
-export function renderShellPage(service: WebModuleService, boot: ClientBootEntry[], defaultPlugin?: string): string {
+export function renderShellPage(service: WebModuleService, boot: ClientBootEntry[], defaultPlugin?: string, clientConfig: Record<string, unknown> = {}): string {
   const modules = JSON.stringify(service.modules)
   const version = JSON.stringify(service.version)
   const loader = buildLoaderSource(service.importmap, ['react', 'react-dom', 'react-dom/client', 'cordis'], boot)
@@ -24,6 +24,9 @@ export function renderShellPage(service: WebModuleService, boot: ClientBootEntry
 <div id="shell-root"></div>
 <script>
 window.CLIENT_BOOT = ${JSON.stringify(boot).replace(/</g, '\\u003c')}
+</script>
+<script>
+window.__CLIENT_CONFIG__ = ${JSON.stringify(clientConfig).replace(/</g, '\\u003c')}
 </script>
 <script>
 ${loader}

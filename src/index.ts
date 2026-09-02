@@ -2,6 +2,7 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { Context } from 'cordis'
 import type { StandardSchemaV1 } from '@standard-schema/spec'
+import * as yaml from 'js-yaml'
 import { ModuleTable } from './module-table.ts'
 import { renderShellPage } from './shell-page.ts'
 
@@ -64,7 +65,22 @@ export function apply(ctx: Context, config: WebModuleConfig) {
   disposers.push(ctx.webServer.register({
     kind: 'exact',
     path: '/shell',
-    handler: (_req, res) => write(res, 200, renderShellPage(table, boot, defaultPlugin), 'text/html; charset=utf-8'),
+    handler: async (_req, res) => {
+      // 注入前端插件 config:读 cordis 实际生效配置(YAML)→ 按 boot 条目 id 映射为 window.__CLIENT_CONFIG__
+      let clientConfig: Record<string, unknown> = {}
+      if (typeof ctx.registry?.git === 'function') {
+        try {
+          const yamlText = await ctx.registry.git()
+          const rows = yaml.load(yamlText) as Array<{ id?: string; config?: unknown }> | null
+          for (const row of rows ?? []) {
+            if (row?.id && boot.some((e) => e.id === row.id)) clientConfig[row.id] = row.config
+          }
+        } catch (error) {
+          ctx.logger.warn('[web-module] 读取生效配置失败: %s', (error as Error).message)
+        }
+      }
+      write(res, 200, renderShellPage(table, boot, defaultPlugin, clientConfig), 'text/html; charset=utf-8')
+    },
   }))
 
   disposers.push(ctx.webServer.register({
