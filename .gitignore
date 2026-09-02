@@ -1,0 +1,16 @@
+# 白名单式 .gitignore:默认忽略一切,仅显式放行源码与配置文件。
+# 规则顺序:先 `*` 忽略所有文件,再用 `!` 反向放行。
+*
+!*/
+!src/
+!src/**
+!tests/
+!tests/**
+!package.json
+!package-lock.json
+!pnpm-lock.yaml
+!tsconfig.json
+!vitest.config.ts
+!cordis.patch.yml
+!README.md
+!.gitignore
