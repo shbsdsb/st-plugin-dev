@@ -218,7 +218,8 @@ function renderDialogContent(root: HTMLElement, st: DialogState): void {
 
 // ---- 列表渲染(绝对定位 + 动态高度;有 config 在前,无 config 固定底部) ----
 function hasConfigEntry(e: SettingEntry): boolean {
-  return e.config !== null && e.config !== undefined && typeof e.config === 'object'
+  // 仅非空对象视为"有 config"(空对象无可配置字段,归入无 config 变暗)
+  return e.config !== null && e.config !== undefined && typeof e.config === 'object' && Object.keys(e.config as Record<string, unknown>).length > 0
 }
 function renderList(st: DialogState): void {
   const container = st.container
