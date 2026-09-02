@@ -98,5 +98,10 @@ body button:active { opacity: .8; }
   color: ${accent} !important;
   box-shadow: inset 0 0 0 1px #e0e0e0 !important;
 }
+/* ===== 移动端断点微调 ===== */
+@media (max-width: 768px) {
+  [data-slot="sidebar-left"], [data-slot="sidebar-right"] { border-radius: 0 !important; }
+  [data-slot="nav"] { padding: 0 4px !important; }
+}
 `
 }
