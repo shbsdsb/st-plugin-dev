@@ -15,8 +15,8 @@ describe('credential', () => {
     const fakeRun = ((_file: string, args: string[], _opts: unknown): string => {
       const script = args.join(' ')
       scripts.push(script)
-      // 模拟 PasswordVault.Retrieve 返回 MARK+secret
-      return script.includes('Retrieve') ? '@@CRED@@topsecret\n' : ''
+      // 模拟 PasswordVault.Retrieve 返回 MARK+Base64(secret)
+      return script.includes('Retrieve') ? `@@CRED@@${Buffer.from('topsecret').toString('base64')}` : ''
     }) as unknown as typeof execFileSync
 
     const store = createCredentialStore({ platform: 'win32', execFileSync: fakeRun })

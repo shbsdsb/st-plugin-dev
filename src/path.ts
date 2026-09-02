@@ -1,4 +1,4 @@
-import { resolve, relative, isAbsolute } from 'node:path'
+import { resolve, relative, isAbsolute, sep } from 'node:path'
 
 /** 路径解析工具:所有文件类服务(persistJson/env/db)共用 */
 export class StoreError extends Error {
@@ -30,7 +30,8 @@ export function resolvePersistPath(stHome: string, relativePath: string): string
   }
   const resolved = resolve(stHome, relativePath)
   const rel = relative(stHome, resolved)
-  if (rel === '' || rel === '..' || rel.startsWith('..') || isAbsolute(rel)) {
+  const firstSeg = rel.split(sep)[0]
+  if (rel === '' || firstSeg === '..' || firstSeg === '..' + sep || isAbsolute(rel)) {
     throw new StoreError(`路径越界,不允许越出 ST_HOME: ${relativePath}`)
   }
   return resolved
