@@ -50,14 +50,14 @@ describe('createThemeEngine', () => {
     expect(engine.get()).toEqual(DEFAULT_THEME)
   })
 
-  it('set 局部更新并重建样式(含新 accent),默认 3 个光球', () => {
+  it('set 局部更新并重建样式(含新 accent);简约默认 0 光球', () => {
     engine.set({ accent: '#0ea5e9' })
     expect(engine.get().accent).toBe('#0ea5e9')
     expect(engine.get().blur).toBe(DEFAULT_THEME.blur)
     const style = headChildren.find((c) => c.id === 'ui-tool-plugin-theme')
     expect(style?.textContent).toContain('#0ea5e9')
-    const orbs = document.querySelectorAll('.st-beautify-orb')
-    expect(orbs.length).toBe(3)
+    // 简约默认 orbCount 0 → 无光球
+    expect(document.querySelectorAll('.st-beautify-orb').length).toBe(0)
   })
 
   it('set 覆盖 orbCount 后光球数量跟随', () => {
