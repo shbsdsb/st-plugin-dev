@@ -74,7 +74,14 @@ function ensureStyle(): void {
 .ps-head{display:flex;align-items:center;gap:8px;height:46px;padding:0 12px;cursor:grab;user-select:none;}
 .ps-drag{color:#cbd5e1;cursor:grab;font-size:14px;}
 .ps-name{flex:1;font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#334155;}
+.ps-id{font-size:11px;color:#aaa;font-family:monospace;margin-left:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:160px;}
 .ps-caret{border:none;background:none;cursor:pointer;color:#64748b;font-size:13px;}
+.ps-entry.ps-no-config{background:#fafafa;border-color:#ececec;}
+.ps-entry.ps-no-config .ps-name,
+.ps-entry.ps-no-config .ps-id{color:#bbb;}
+.ps-entry.ps-no-config .ps-caret{display:none;}
+.ps-entry.ps-no-config .ps-drag{color:#e5e7eb;}
+.ps-entry.ps-no-config:hover{cursor:default;box-shadow:none;border-color:#ececec;}
 .ps-detail{border-top:1px dashed rgba(148,163,184,.4);padding:12px;font-size:12px;display:none;background:rgba(248,250,252,.6);border-radius:0 0 12px 12px;}
 .ps-entry.ps-open .ps-detail{display:block;}
 .ps-entry.ps-dragging{z-index:100;box-shadow:0 12px 40px rgba(31,38,135,.25);border-color:rgba(124,109,246,.6);cursor:grabbing;transition:box-shadow .2s ease,border-color .2s ease;}
@@ -209,7 +216,10 @@ function renderDialogContent(root: HTMLElement, st: DialogState): void {
   container.addEventListener('dragstart', (e) => e.preventDefault())
 }
 
-// ---- 列表渲染(绝对定位 + 动态高度) ----
+// ---- 列表渲染(绝对定位 + 动态高度;有 config 在前,无 config 固定底部) ----
+function hasConfigEntry(e: SettingEntry): boolean {
+  return e.config !== null && e.config !== undefined && typeof e.config === 'object'
+}
 function renderList(st: DialogState): void {
   const container = st.container
   if (!container) return
@@ -218,9 +228,13 @@ function renderList(st: DialogState): void {
   drop.className = 'ps-drop-indicator'
   container.appendChild(drop)
   st.drop = drop
+  // 固定排序:有 config 条目在前,无 config 条目在列表底部
+  st.entries = [...st.entries].sort((a, b) => (hasConfigEntry(b) ? 1 : 0) - (hasConfigEntry(a) ? 1 : 0))
+  st.order = st.entries.map((_, i) => i)
   st.items = st.entries.map((e, i) => {
+    const cfg = hasConfigEntry(e)
     const box = document.createElement('div')
-    box.className = 'ps-entry' + (st.openId === i ? ' ps-open' : '')
+    box.className = 'ps-entry' + (st.openId === i ? ' ps-open' : '') + (cfg ? '' : ' ps-no-config')
     box.dataset.index = String(i)
     const head = document.createElement('div')
     head.className = 'ps-head'
@@ -230,34 +244,39 @@ function renderList(st: DialogState): void {
     const name = document.createElement('span')
     name.className = 'ps-name'
     name.textContent = e.name
+    // id 展示在条目名称后(小字灰)
+    const id = document.createElement('span')
+    id.className = 'ps-id'
+    id.textContent = e.id
     const caret = document.createElement('button')
     caret.className = 'ps-caret'
-    caret.textContent = st.openId === i ? '▾' : '▸'
-    caret.addEventListener('click', (ev) => {
-      ev.stopPropagation()
-      st.openId = st.openId === i ? null : i
-      renderList(st)
-    })
-    head.append(drag, name, caret)
-    box.appendChild(head)
-    // 展开详情:插件 ID + 配置控件
-    const detail = document.createElement('div')
-    detail.className = 'ps-detail'
-    const idLine = document.createElement('div')
-    idLine.style.cssText = 'color:#94a3b8;margin-bottom:8px;'
-    idLine.textContent = '插件 ID: ' + e.id
-    detail.appendChild(idLine)
-    if (e.config && typeof e.config === 'object') {
-      for (const key of Object.keys(e.config as Record<string, unknown>)) {
-        detail.appendChild(controlField(st, i, key, (e.config as Record<string, unknown>)[key]))
-      }
-    } else {
-      const span = document.createElement('span')
-      span.className = 'ps-none'
-      span.textContent = '无配置'
-      detail.appendChild(span)
+    if (cfg) {
+      caret.textContent = st.openId === i ? '▾' : '▸'
+      caret.addEventListener('click', (ev) => {
+        ev.stopPropagation()
+        st.openId = st.openId === i ? null : i
+        renderList(st)
+      })
     }
-    box.appendChild(detail)
+    head.append(drag, name, id, cfg ? caret : document.createElement('span'))
+    box.appendChild(head)
+    // 展开详情:仅 config 条目;无 config 不构建(不可展开)
+    if (cfg) {
+      const detail = document.createElement('div')
+      detail.className = 'ps-detail'
+      const keys = Object.keys(e.config as Record<string, unknown>)
+      if (keys.length === 0) {
+        const span = document.createElement('span')
+        span.className = 'ps-none'
+        span.textContent = '无配置字段(空对象)'
+        detail.appendChild(span)
+      } else {
+        for (const key of keys) {
+          detail.appendChild(controlField(st, i, key, (e.config as Record<string, unknown>)[key]))
+        }
+      }
+      box.appendChild(detail)
+    }
     container.appendChild(box)
     return box
   })
@@ -416,6 +435,8 @@ function moveDrag(st: DialogState, mouseY: number): void {
   })
 }
 function startDrag(st: DialogState, index: number, mouseY: number): void {
+  // 无 config 条目固定底部,不可拖拽
+  if (!hasConfigEntry(st.entries[index])) return
   st.isDragging = true
   st.dragIndex = index
   st.dragStartY = mouseY
