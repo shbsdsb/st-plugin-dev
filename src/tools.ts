@@ -83,12 +83,12 @@ function createFloat(spec: {
   }
   const tx = document.createElement('div')
   const b = document.createElement('b')
-  b.style.cssText = 'display:block;font-size:13px;color:#333;font-weight:500;'
+  b.style.cssText = 'display:block;font-size:13px;font-weight:500;'
   b.textContent = spec.title
   tx.appendChild(b)
   if (spec.desc) {
     const s = document.createElement('span')
-    s.style.cssText = 'display:block;font-size:11px;color:#999;'
+    s.style.cssText = 'display:block;font-size:11px;'
     s.textContent = spec.desc
     tx.appendChild(s)
   }
