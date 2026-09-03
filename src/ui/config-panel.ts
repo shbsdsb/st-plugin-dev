@@ -135,7 +135,7 @@ export function createConfigPanel(ui: UiToolsLike, api: typeof import('./api.ts'
     state.name = next
     if (state.id === null) { syncOptions(); setStatusNow('已改名(保存后生效)', 'info'); return }
     syncOptions()
-    api.updatePreset(state.id, { ...state, apiKey: '' })
+    api.updatePreset(state.id, { ...state, presetName: state.name })
       .then(() => {
         const row = rows.find((r) => r.id === state.id)
         if (row) row.presetName = state.name
