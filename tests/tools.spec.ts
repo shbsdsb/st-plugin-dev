@@ -18,6 +18,7 @@ function makeEl(tag: string) {
   const children: Array<{ className: string; textContent: string; style: Record<string, string> }> = []
   return {
     tagName: tag, className: '', textContent: '', innerHTML: '', style: {} as Record<string, string>,
+    dataset: {} as Record<string, string>,
     classList,
     children,
     setAttribute() {},
@@ -166,6 +167,19 @@ describe('createTools 模态与特殊工具', () => {
     // 3 个创建,前两个被互斥关闭(250ms 后移除)
     vi.advanceTimersByTime(300)
     expect(bodyChildren.length).toBe(1)
+    vi.useRealTimers()
+  })
+
+  it('modal 打开不关闭承载它的 pluginModal(嵌套确认)', () => {
+    vi.useFakeTimers()
+    tools.pluginModal({ title: '配置', content: (el) => { el.textContent = '面板' } })
+    // harness 纯 DOM stub:按既有风格等价改写 bodyChildren 过滤,断言目标不变
+    expect(bodyChildren.filter((c) => c.className.includes('fw-mask')).length).toBe(1)
+    tools.modal({ title: '删除', desc: '确认?', onOk: () => {} })
+    // 旧实现 modal() 内 closeMasked() 全杀父 pluginModal:advance 250ms 后被移除,只剩 1 个 mask
+    // 修复后:父 pluginModal 仍在,新确认框叠于其上(共 2 个 mask)
+    vi.advanceTimersByTime(300)
+    expect(bodyChildren.filter((c) => c.className.includes('fw-mask')).length).toBe(2)
     vi.useRealTimers()
   })
 })

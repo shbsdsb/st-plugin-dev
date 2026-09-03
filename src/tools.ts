@@ -133,9 +133,12 @@ function hide(el: HTMLElement): void {
   }, 300)
 }
 
-/** 遮罩互斥:新开时关闭旧的 */
-function closeMasked(): void {
-  for (const m of [...masked]) hideMask(m)
+/** 遮罩互斥:关闭旧遮罩;except 命中的 kind 保留(嵌套确认框不得关闭承载它的 pluginModal) */
+function closeMasked(except?: string): void {
+  for (const m of [...masked]) {
+    if (except && m.dataset.kind === except) continue
+    hideMask(m)
+  }
 }
 
 /** 关闭单个遮罩 */
@@ -208,9 +211,10 @@ export function createTools(): Tools {
       show(el)
     },
     modal({ title, desc, onOk, onCancel }) {
-      closeMasked()
+      closeMasked('pluginModal') // 只互斥同级 modal,保留父 pluginModal
       const mask = document.createElement('div')
       mask.className = 'fw-mask'
+      mask.dataset.kind = 'modal'
       const box = document.createElement('div')
       box.className = 'fw-modal'
       const h = document.createElement('h3')
@@ -302,6 +306,7 @@ export function createTools(): Tools {
       closeMasked()
       const mask = document.createElement('div')
       mask.className = 'fw-mask'
+      mask.dataset.kind = 'pluginModal'
       const box = document.createElement('div')
       box.className = 'fw-modal'
       box.style.cssText = `width:${width ? width + 'px' : 'min(420px,92vw)'};max-height:82vh;display:flex;flex-direction:column;overflow:hidden;text-align:left;padding:0;`
