@@ -23,14 +23,19 @@ export function apply(ctx: Context, _config: Record<string, unknown>) {
   let db: import('node:sqlite').DatabaseSync | null = null
   let disposeRoutes: (() => void) | null = null
   ctx.effect(async () => {
-    db = await ctx.persistDb.open('data/llm/presets.db')
-    initPresets(db)
-    disposeRoutes = registerRoutes(ctx.webServer.register, { db, cred: ctx.credential })
-    return () => {
-      disposeRoutes?.()
-      disposeRoutes = null
-      db?.close()
-      db = null
+    try {
+      db = await ctx.persistDb.open('data/llm/presets.db')
+      initPresets(db)
+      disposeRoutes = registerRoutes(ctx.webServer.register.bind(ctx.webServer), { db, cred: ctx.credential })
+      return () => {
+        disposeRoutes?.()
+        disposeRoutes = null
+        db?.close()
+        db = null
+      }
+    } catch (e) {
+      console.error('[llm-plugin] init error:', (e as Error)?.message ?? e)
+      return () => {}
     }
   })
 }
