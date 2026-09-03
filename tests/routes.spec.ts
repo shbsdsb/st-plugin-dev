@@ -15,7 +15,7 @@ function capture(db: DatabaseSync, fetchImpl?: typeof fetch) {
   const handlers = new Map<string, (req: IncomingMessage, res: ServerResponse) => void | Promise<void>>()
   const dispose = registerRoutes((o) => { handlers.set(o.path, o.handler); return () => handlers.delete(o.path) }, { db, cred: fakeCred, fetchImpl })
   const call = async (path: string, body?: unknown, method = 'POST') => {
-    const h = handlers.get(path) ?? [...handlers.entries()].find(([k]) => k.endsWith('/') && path.startsWith(k))?.[1]
+    const h = (handlers.get(path) ?? [...handlers.entries()].find(([k]) => k.endsWith('/') && path.startsWith(k))?.[1])!
     const req = {
       url: path, method,
       on(type: string, cb: (c?: unknown) => void) { if (type === 'data') cb(Buffer.from(JSON.stringify(body ?? {}))); if (type === 'end') cb() },
