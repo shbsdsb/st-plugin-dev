@@ -32,12 +32,12 @@ export function deletePreset(id: number): Promise<{ id: number }> {
 
 export function fetchModels(id: number): Promise<string[]> {
   return apiFetch('/api/llm/models', { method: 'POST', body: JSON.stringify({ id }) })
-    .then((r) => (r.data as { models: string[] }).models)
+    .then((r) => { if (!r.ok) throw new Error(r.message || '拉取失败'); return (r.data as { models: string[] }).models })
 }
 
 export function fetchModelsByInput(input: { format: string; baseUrl: string; apiKey: string }): Promise<string[]> {
   return apiFetch('/api/llm/models', { method: 'POST', body: JSON.stringify(input) })
-    .then((r) => (r.data as { models: string[] }).models)
+    .then((r) => { if (!r.ok) throw new Error(r.message || '拉取失败'); return (r.data as { models: string[] }).models })
 }
 
 export function testPreset(id: number): Promise<boolean> {
