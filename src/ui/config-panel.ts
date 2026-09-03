@@ -119,8 +119,9 @@ export function createConfigPanel(ui: UiToolsLike, api: typeof import('./api.ts'
 
   const timeoutInput = el('input'); timeoutInput.type = 'number'; timeoutInput.value = '30'; timeoutInput.min = '1'; timeoutInput.max = '300'
 
+  const nameInput = el('input'); nameInput.placeholder = '给预设命名(如 默认)'
   const form = el('div'); form.append(
-    fg('格式', formatSelect), fg('厂商', vendorSelect), fg('API 地址', baseWrap),
+    fg('预设名', nameInput), fg('格式', formatSelect), fg('厂商', vendorSelect), fg('API 地址', baseWrap),
     fg('模型', modelField), fg('密钥', keyWrap), fg('超时（秒）', timeoutInput),
   )
 
@@ -137,12 +138,13 @@ export function createConfigPanel(ui: UiToolsLike, api: typeof import('./api.ts'
   function presetInput(presetId: number): Record<string, unknown> {
     const key = keyInput.value.trim()
     return {
-      presetName: presetSelect.value, format: formatSelect.value, vendor: vendorSelect.value,
+      presetName: nameInput.value.trim(), format: formatSelect.value, vendor: vendorSelect.value,
       baseUrl: baseUrlInput.value.trim(), model: modelInput.value.trim(), timeout: Number(timeoutInput.value) || 30,
       ...(key ? { apiKey: key } : {}),
     }
   }
   function fillForm(p: { presetName: string; format: string; vendor: string; baseUrl: string; model: string; timeout: number; hasKey: boolean }): void {
+    nameInput.value = p.presetName
     presetSelect.value = p.presetName
     formatSelect.value = p.format
     vendorSelect.value = p.vendor
@@ -170,7 +172,10 @@ export function createConfigPanel(ui: UiToolsLike, api: typeof import('./api.ts'
     const rows = await api.listPresets()
     presetSelect.innerHTML = ''
     for (const r of rows) { const o = document.createElement('option'); o.value = String(r.id); o.textContent = r.presetName; presetSelect.appendChild(o) }
-    if (rows.length > 0) { await selectPreset(rows[0].id) } else { currentId = 0; hasKey = false; resetForm() }
+    if (rows.length > 0) {
+      const target = currentId > 0 && rows.some((r) => r.id === currentId) ? currentId : rows[0].id
+      await selectPreset(target)
+    } else { currentId = 0; hasKey = false; resetForm() }
   }
   async function selectPreset(id: number): Promise<void> {
     currentId = id
@@ -178,6 +183,7 @@ export function createConfigPanel(ui: UiToolsLike, api: typeof import('./api.ts'
     if (p) fillForm(p)
   }
   function resetForm(): void {
+    nameInput.value = ''
     presetSelect.value = ''
     vendorSelect.value = ''
     baseUrlInput.value = ''; baseUrlInput.disabled = false; formatSelect.disabled = false
@@ -189,8 +195,8 @@ export function createConfigPanel(ui: UiToolsLike, api: typeof import('./api.ts'
   presetSelect.addEventListener('change', () => void selectPreset(Number(presetSelect.value)))
   renameBtn.addEventListener('click', async () => {
     if (currentId === 0) { setStatus(indicator, statusText, '请先保存预设再改名', 'error'); return }
-    const name = window.prompt('重命名预设', presetSelect.value)
-    if (name && name.trim() && name.trim() !== presetSelect.value) {
+    const name = window.prompt('重命名预设', nameInput.value)
+    if (name && name.trim() && name.trim() !== nameInput.value) {
       try {
         await api.updatePreset(currentId, { ...presetInput(currentId), presetName: name.trim() })
         ui.toast('已改名')
@@ -203,7 +209,7 @@ export function createConfigPanel(ui: UiToolsLike, api: typeof import('./api.ts'
 
   // ---- 保存 ----
   saveBtn.addEventListener('click', async () => {
-    if (!presetSelect.value || !baseUrlInput.value.trim() || !modelInput.value.trim()) { setStatus(indicator, statusText, '请完整填写预设名/地址/模型', 'error'); return }
+    if (!nameInput.value.trim() || !baseUrlInput.value.trim() || !modelInput.value.trim()) { setStatus(indicator, statusText, '请完整填写预设名/地址/模型', 'error'); return }
     const input = presetInput(0)
     try {
       if (currentId === 0) { const { id } = await api.createPreset({ ...input, apiKey: keyInput.value.trim() }); currentId = id }
