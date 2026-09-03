@@ -64,7 +64,7 @@ function ensureStyle(): void {
 /* ===== demo 定稿样式(同类选择器,覆盖上方) ===== */
 .llm *{box-sizing:border-box;}
 .llm .row-preset{display:flex;align-items:center;gap:8px;margin-bottom:14px;border:1px solid #e4e4e7;border-radius:8px;padding:6px 10px;background:#f4f4f5;}
-.llm .row-preset select{flex:1;min-width:0;padding:7px 28px 7px 10px;font-size:13px;font-weight:500;border:none;background:transparent;color:#18181b;outline:none;cursor:pointer;appearance:none;-webkit-appearance:none;}
+.llm .row-preset select{flex:1;min-width:0;padding:7px 28px 7px 10px;font-size:13px;font-weight:500;border:none;background:transparent url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='5' viewBox='0 0 8 5'%3E%3Cpath d='M1 1l3 3 3-3' stroke='%23a1a1aa' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E") no-repeat right 10px center;color:#18181b;outline:none;cursor:pointer;appearance:none;-webkit-appearance:none;}
 .llm .text-btn{padding:5px 9px;font-size:12px;font-weight:500;border:1px solid transparent;border-radius:6px;background:transparent;color:#52525b;cursor:pointer;white-space:nowrap;}
 .llm .text-btn:hover{background:#fff;border-color:#d4d4d8;color:#18181b;}
 .llm .row-actions{display:flex;gap:8px;margin-bottom:16px;}
@@ -75,7 +75,8 @@ function ensureStyle(): void {
 .llm .fg{display:flex;flex-direction:column;gap:4px;margin-bottom:14px;}
 .llm .fg label{font-size:13px;font-weight:500;color:#18181b;}
 .llm .iw{position:relative;display:flex;align-items:center;}
-.llm .iw input,.llm .iw select{width:100%;padding:10px 14px;font-size:14px;font-family:inherit;border:1px solid #d4d4d8;border-radius:8px;background:#fff;color:#18181b;outline:none;box-shadow:0 1px 2px rgba(0,0,0,0.04);}
+.llm .iw input{width:100%;padding:10px 14px;font-size:14px;font-family:inherit;border:1px solid #d4d4d8;border-radius:8px;background:#fff;color:#18181b;outline:none;box-shadow:0 1px 2px rgba(0,0,0,0.04);}
+.llm .iw select{width:100%;padding:10px 36px 10px 14px;font-size:14px;font-family:inherit;border:1px solid #d4d4d8;border-radius:8px;background:#fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='5' viewBox='0 0 8 5'%3E%3Cpath d='M1 1l3 3 3-3' stroke='%23a1a1aa' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E") no-repeat right 14px center;color:#18181b;outline:none;appearance:none;-webkit-appearance:none;cursor:pointer;box-shadow:0 1px 2px rgba(0,0,0,0.04);}
 .llm .iw input:focus,.llm .iw select:focus{border-color:#18181b;}
 .llm .iw input:disabled,.llm .iw select:disabled{background:#f4f4f5;color:#a1a1aa;cursor:not-allowed;border-color:#e4e4e7;}
 .llm .iw.has-prefix input{padding-left:78px;}
@@ -185,9 +186,8 @@ export function createConfigPanel(ui: UiToolsLike, api: typeof import('./api.ts'
 
   const timeoutInput = el('input'); timeoutInput.type = 'number'; timeoutInput.value = '30'; timeoutInput.min = '1'; timeoutInput.max = '300'
 
-  const nameInput = el('input'); nameInput.placeholder = '给预设命名(如 默认)'
   const form = el('div'); form.append(
-    fg('预设名', nameInput), fg('格式', formatSelect), fg('厂商', vendorSelect), fg('API 地址', baseWrap),
+    fg('格式', formatSelect), fg('厂商', vendorSelect), fg('API 地址', baseWrap),
     fg('模型', modelField), fg('密钥', keyWrap), fg('超时（秒）', timeoutInput),
   )
 
@@ -204,13 +204,12 @@ export function createConfigPanel(ui: UiToolsLike, api: typeof import('./api.ts'
   function presetInput(presetId: number): Record<string, unknown> {
     const key = keyInput.value.trim()
     return {
-      presetName: nameInput.value.trim(), format: formatSelect.value, vendor: vendorSelect.value,
+      presetName: presetSelect.value, format: formatSelect.value, vendor: vendorSelect.value,
       baseUrl: baseUrlInput.value.trim(), model: modelInput.value.trim(), timeout: Number(timeoutInput.value) || 30,
       ...(key ? { apiKey: key } : {}),
     }
   }
   function fillForm(p: { presetName: string; format: string; vendor: string; baseUrl: string; model: string; timeout: number; hasKey: boolean }): void {
-    nameInput.value = p.presetName
     presetSelect.value = p.presetName
     formatSelect.value = p.format
     vendorSelect.value = p.vendor
@@ -249,8 +248,9 @@ export function createConfigPanel(ui: UiToolsLike, api: typeof import('./api.ts'
     if (p) fillForm(p)
   }
   function resetForm(): void {
-    nameInput.value = ''
-    presetSelect.value = ''
+    let o = Array.from(presetSelect.options).find((x) => x.value === '新预设')
+    if (!o) { o = document.createElement('option'); o.value = '新预设'; o.textContent = '新预设'; presetSelect.appendChild(o) }
+    presetSelect.value = '新预设'
     vendorSelect.value = ''
     baseUrlInput.value = ''; baseUrlInput.disabled = false; formatSelect.disabled = false
     formatSelect.value = 'openai_compatible'
@@ -261,8 +261,8 @@ export function createConfigPanel(ui: UiToolsLike, api: typeof import('./api.ts'
   presetSelect.addEventListener('change', () => void selectPreset(Number(presetSelect.value)))
   renameBtn.addEventListener('click', async () => {
     if (currentId === 0) { setStatus(indicator, statusText, '请先保存预设再改名', 'error'); return }
-    const name = window.prompt('重命名预设', nameInput.value)
-    if (name && name.trim() && name.trim() !== nameInput.value) {
+    const name = window.prompt('重命名预设', presetSelect.value)
+    if (name && name.trim() && name.trim() !== presetSelect.value) {
       try {
         await api.updatePreset(currentId, { ...presetInput(currentId), presetName: name.trim() })
         ui.toast('已改名')
@@ -275,7 +275,7 @@ export function createConfigPanel(ui: UiToolsLike, api: typeof import('./api.ts'
 
   // ---- 保存 ----
   saveBtn.addEventListener('click', async () => {
-    if (!nameInput.value.trim() || !baseUrlInput.value.trim() || !modelInput.value.trim()) { setStatus(indicator, statusText, '请完整填写预设名/地址/模型', 'error'); return }
+    if (!presetSelect.value || !baseUrlInput.value.trim() || !modelInput.value.trim()) { setStatus(indicator, statusText, '请完整填写预设名/地址/模型', 'error'); return }
     const input = presetInput(0)
     try {
       if (currentId === 0) { const { id } = await api.createPreset({ ...input, apiKey: keyInput.value.trim() }); currentId = id }
