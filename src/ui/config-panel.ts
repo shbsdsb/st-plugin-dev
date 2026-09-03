@@ -65,10 +65,11 @@ export function createConfigPanel(ui: UiToolsLike, api: typeof import('./api.ts'
   const toggleBtn = el('button', 'toggle'); toggleBtn.textContent = '◉'
   const keyWrap = el('div', 'iw'); keyWrap.append(keyInput, toggleBtn)
   const timeoutInput = el('input') as HTMLInputElement; timeoutInput.type = 'number'; timeoutInput.value = '30'; timeoutInput.min = '1'; timeoutInput.max = '300'
+  const timeoutWrap = el('div', 'iw'); timeoutWrap.appendChild(timeoutInput)
 
   const form = el('div'); form.append(
     fg('格式', formatSelect), fg('厂商', vendorSelect), fg('API 地址', baseWrap),
-    fg('模型', modelField), fg('密钥', keyWrap), fg('超时（秒）', timeoutInput),
+    fg('模型', modelField), fg('密钥', keyWrap), fg('超时（秒）', timeoutWrap),
   )
 
   const testBtn = el('button', 'btn-test'); testBtn.textContent = '测试'
