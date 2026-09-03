@@ -187,6 +187,18 @@ export function createConfigPanel(ui: UiToolsLike, api: typeof import('./api.ts'
   }
 
   presetSelect.addEventListener('change', () => void selectPreset(Number(presetSelect.value)))
+  renameBtn.addEventListener('click', async () => {
+    if (currentId === 0) { setStatus(indicator, statusText, '请先保存预设再改名', 'error'); return }
+    const name = window.prompt('重命名预设', presetSelect.value)
+    if (name && name.trim() && name.trim() !== presetSelect.value) {
+      try {
+        await api.updatePreset(currentId, { ...presetInput(currentId), presetName: name.trim() })
+        ui.toast('已改名')
+        await loadPresets()
+        setStatus(indicator, statusText, '已改名', 'success')
+      } catch (e) { setStatus(indicator, statusText, '改名失败: ' + (e as Error).message, 'error') }
+    }
+  })
   vendorSelect.addEventListener('change', () => { applyVendorAuto(); if (modelInput.value) modelInput.value = '' })
 
   // ---- 保存 ----
