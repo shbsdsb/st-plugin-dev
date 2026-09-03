@@ -88,18 +88,26 @@ export function registerRoutes(register: Register, dep: { db: DatabaseSync; cred
     } catch (e) { fail(res, (e as Error).message) }
   })
 
-  // /api/llm/models : 拉取模型
+  // /api/llm/models : 拉取模型(已存预设 id 或 当前表单字段)
   add('exact', '/api/llm/models', async (req, res) => {
     try {
-      const b = JSON.parse(await readBody(req)) as { id: number }
-      const p = getPreset(db, Number(b.id))
-      if (!p) return fail(res, '预设不存在')
-      const key = await cred.get(`llm:${p.id}`)
-      if (!key) return fail(res, '未保存密钥')
-      const r = buildModelRequest(p.format, p.baseUrl, key)
-      const { status, json } = await sendJson({ method: r.method, url: r.url, headers: r.headers }, p.timeout, fetchFn)
+      const b = JSON.parse(await readBody(req)) as { id?: number; format?: string; baseUrl?: string; apiKey?: string; timeout?: number }
+      let format: string, baseUrl: string, key: string, timeout = 30
+      if (b.id) {
+        const p = getPreset(db, Number(b.id))
+        if (!p) return fail(res, '预设不存在')
+        key = (await cred.get(`llm:${p.id}`)) ?? ''
+        if (!key) return fail(res, '未保存密钥')
+        format = p.format; baseUrl = p.baseUrl; timeout = p.timeout
+      } else {
+        format = String(b.format ?? ''); baseUrl = String(b.baseUrl ?? ''); key = String(b.apiKey ?? '')
+        if (!format || !baseUrl || !key) return fail(res, '请提供 format/baseUrl/apiKey(或已保存的 id)')
+        timeout = Number(b.timeout) || 30
+      }
+      const r = buildModelRequest(format, baseUrl, key)
+      const { status, json } = await sendJson({ method: r.method, url: r.url, headers: r.headers }, timeout, fetchFn)
       if (status < 200 || status >= 300) return fail(res, `拉取失败: HTTP ${status}`)
-      ok(res, { models: parseModelList(p.format, json) })
+      ok(res, { models: parseModelList(format, json) })
     } catch (e) { fail(res, (e as Error).message) }
   })
 

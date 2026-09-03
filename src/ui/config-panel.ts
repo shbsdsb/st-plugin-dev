@@ -244,13 +244,19 @@ export function createConfigPanel(ui: UiToolsLike, api: typeof import('./api.ts'
     }
   }
   async function openModels(): Promise<void> {
-    if (!currentId) { setStatus(indicator, statusText, '请先保存预设再拉取', 'error'); return }
     const willShow = !dropdown.classList.contains('show')
     dropdown.classList.toggle('show', willShow)
     arrow.classList.toggle('open', willShow)
     if (!willShow) return
-    const list = await api.fetchModels(currentId)
-    renderDropdown(list, modelInput.value)
+    const format = formatSelect.value
+    const baseUrl = baseUrlInput.value.trim()
+    const apiKey = keyInput.value.trim()
+    if (!baseUrl) { setStatus(indicator, statusText, '请先填 API 地址', 'error'); return }
+    if (!apiKey) { setStatus(indicator, statusText, '请先填密钥', 'error'); return }
+    try {
+      const list = await api.fetchModelsByInput({ format, baseUrl, apiKey })
+      renderDropdown(list, modelInput.value)
+    } catch (e) { setStatus(indicator, statusText, '拉取失败: ' + (e as Error).message, 'error') }
   }
   fetchBtn.addEventListener('click', () => void openModels())
 

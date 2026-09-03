@@ -88,4 +88,13 @@ describe('routes', () => {
     expect(fakeCred.map.has(`llm:${id}`)).toBe(false)
     c.dispose()
   })
+
+  it('models 拉取用当前表单字段(无需 id)', async () => {
+    const fetchImpl = (async () => ({ status: 200, text: async () => JSON.stringify({ data: [{ id: 'deepseek-chat' }] }) })) as unknown as typeof fetch
+    const c = capture(db, fetchImpl)
+    const r = await c.call('/api/llm/models', { format: 'openai_compatible', baseUrl: 'api.deepseek.com/v1', apiKey: 'sk-1' })
+    expect(r.json.ok).toBe(true)
+    expect(r.json.data.models).toEqual(['deepseek-chat'])
+    c.dispose()
+  })
 })

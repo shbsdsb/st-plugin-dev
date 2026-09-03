@@ -35,6 +35,11 @@ export function fetchModels(id: number): Promise<string[]> {
     .then((r) => (r.data as { models: string[] }).models)
 }
 
+export function fetchModelsByInput(input: { format: string; baseUrl: string; apiKey: string }): Promise<string[]> {
+  return apiFetch('/api/llm/models', { method: 'POST', body: JSON.stringify(input) })
+    .then((r) => (r.data as { models: string[] }).models)
+}
+
 export function testPreset(id: number): Promise<boolean> {
   return apiFetch('/api/llm/test', { method: 'POST', body: JSON.stringify({ id }) })
     .then((r) => r.ok && !!(r.data as { ok?: boolean })?.ok)
