@@ -25,6 +25,6 @@
   },
   "st": {
     "bundle": { "patch": "./cordis.patch.yml" },
-    "client": { "kind": "web", "path": "lib/index.cjs", "immed": true }
+    "client": { "kind": "web", "path": "lib/index.cjs", "immed": true, "inject": ["st-ui-slots", "ui-tool-plugin"] }
   }
 }
