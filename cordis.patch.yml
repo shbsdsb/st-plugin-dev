@@ -1,0 +1,2 @@
+llm-plugin:
+  bundle: ./lib/index.js

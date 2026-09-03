@@ -1,0 +1,30 @@
+{
+  "name": "llm-plugin",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "前后端一体插件:多预设 AI 厂商 API 配置 + 真实测试连通(cordis v4)",
+  "main": "lib/index.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json && node ../../agent_plugin_feat/bootstrap/src/cli/index.ts web-build --cwd .",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "cordis": "file:../../agent_plugin_feat/vendor/cordis",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4",
+    "esbuild": "^0.28.0",
+    "typescript": "^5.7.3",
+    "vitest": "^4.1.11"
+  },
+  "st": {
+    "bundle": { "patch": "./cordis.patch.yml" },
+    "client": { "kind": "web", "path": "lib/index.cjs", "immed": true }
+  }
+}
