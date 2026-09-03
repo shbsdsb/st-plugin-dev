@@ -1,3 +1,14 @@
-node_modules/
-lib/
-*.tsbuildinfo
+# ============ 纯白名单 .gitignore ============
+# 默认忽略所有文件/目录,仅放行以下明确列出的内容。
+/*
+!/.gitignore
+!/package.json
+!/pnpm-lock.yaml
+!/cordis.patch.yml
+!/tsconfig.json
+!/src/
+!/tests/
+!/lib/
+!/src/**
+!/tests/**
+!/lib/**
