@@ -332,7 +332,7 @@ export function createConfigPanel(ui: UiToolsLike, api: typeof import('./api.ts'
     if (!currentId) { setStatus(indicator, statusText, '请先保存预设再测试', 'error'); return }
     testBtn.disabled = true; testBtn.textContent = '测试中…'
     try {
-      const ok = await api.testPreset(currentId)
+      const ok = await api.testPreset({ id: currentId })
       setStatus(indicator, statusText, ok ? '连接成功' : '返回异常', ok ? 'success' : 'error')
     } catch (e) { setStatus(indicator, statusText, '测试失败: ' + (e as Error).message, 'error') }
     testBtn.disabled = false; testBtn.textContent = '测试'

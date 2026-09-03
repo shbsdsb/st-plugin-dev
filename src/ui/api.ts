@@ -15,19 +15,25 @@ export async function apiFetch(path: string, init?: RequestInit): Promise<ApiRes
 }
 
 export function listPresets(): Promise<PresetListItem[]> {
-  return apiFetch('/api/llm/presets').then((r) => (r.ok ? (r.data as PresetListItem[]) : []))
+  return apiFetch('/api/llm/presets').then((r) => {
+    if (!r.ok) throw new Error(r.message || '加载预设失败')
+    return r.data as PresetListItem[]
+  })
 }
 
 export function createPreset(input: object): Promise<{ id: number }> {
-  return apiFetch('/api/llm/presets', { method: 'POST', body: JSON.stringify(input) }).then((r) => r.data as { id: number })
+  return apiFetch('/api/llm/presets', { method: 'POST', body: JSON.stringify(input) })
+    .then((r) => { if (!r.ok) throw new Error(r.message || '保存失败'); return r.data as { id: number } })
 }
 
 export function updatePreset(id: number, input: object): Promise<{ id: number }> {
-  return apiFetch(`/api/llm/presets/${id}`, { method: 'PUT', body: JSON.stringify(input) }).then((r) => r.data as { id: number })
+  return apiFetch(`/api/llm/presets/${id}`, { method: 'PUT', body: JSON.stringify(input) })
+    .then((r) => { if (!r.ok) throw new Error(r.message || '保存失败'); return r.data as { id: number } })
 }
 
 export function deletePreset(id: number): Promise<{ id: number }> {
-  return apiFetch(`/api/llm/presets/${id}`, { method: 'DELETE' }).then((r) => r.data as { id: number })
+  return apiFetch(`/api/llm/presets/${id}`, { method: 'DELETE' })
+    .then((r) => { if (!r.ok) throw new Error(r.message || '删除失败'); return r.data as { id: number } })
 }
 
 export function fetchModels(id: number): Promise<string[]> {
@@ -40,7 +46,11 @@ export function fetchModelsByInput(input: { format: string; baseUrl: string; api
     .then((r) => { if (!r.ok) throw new Error(r.message || '拉取失败'); return (r.data as { models: string[] }).models })
 }
 
-export function testPreset(id: number): Promise<boolean> {
-  return apiFetch('/api/llm/test', { method: 'POST', body: JSON.stringify({ id }) })
-    .then((r) => r.ok && !!(r.data as { ok?: boolean })?.ok)
+export type TestTarget =
+  | { id: number }
+  | { format: string; baseUrl: string; model: string; apiKey: string; timeout?: number }
+
+export function testPreset(target: TestTarget): Promise<boolean> {
+  return apiFetch('/api/llm/test', { method: 'POST', body: JSON.stringify(target) })
+    .then((r) => { if (!r.ok) throw new Error(r.message || '测试失败'); return !!(r.data as { ok?: boolean })?.ok })
 }
