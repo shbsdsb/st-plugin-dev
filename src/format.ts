@@ -80,8 +80,8 @@ export function buildTestRequest(format: string, opts: { baseUrl: string; key: s
 
 export interface FetchInit { method: string; url: string; headers: Record<string, string>; body?: string }
 
-export async function sendJson(req: FetchInit, timeout: number): Promise<{ status: number; json: unknown }> {
-  const res = await fetch(req.url, {
+export async function sendJson(req: FetchInit, timeout: number, fetchImpl: typeof fetch = fetch): Promise<{ status: number; json: unknown }> {
+  const res = await fetchImpl(req.url, {
     method: req.method,
     headers: req.headers,
     body: req.body,
