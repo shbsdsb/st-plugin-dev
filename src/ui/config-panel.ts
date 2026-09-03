@@ -237,7 +237,7 @@ export function createConfigPanel(ui: UiToolsLike, api: typeof import('./api.ts'
     fetchBtn.disabled = true; fetchBtn.style.opacity = '0.6'
     try {
       const list = key
-        ? await api.fetchModelsByInput({ format: state.format, baseUrl: state.baseUrl, apiKey: key })
+        ? await api.fetchModelsByInput({ format: state.format, baseUrl: state.baseUrl, apiKey: key, timeout: state.timeout })
         : state.id !== null
           ? await api.fetchModels(state.id)
           : (() => { throw new Error('API_KEY_NEEDED') })()
@@ -267,7 +267,7 @@ export function createConfigPanel(ui: UiToolsLike, api: typeof import('./api.ts'
     try {
       const ok = await (chk.mode === 'id'
         ? api.testPreset({ id: state.id as number })
-        : api.testPreset({ format: state.format, baseUrl: state.baseUrl, model: state.model, apiKey: key }))
+        : api.testPreset({ format: state.format, baseUrl: state.baseUrl, model: state.model, apiKey: key, timeout: state.timeout }))
       setStatusNow(ok ? '连接成功' : '返回异常', ok ? 'success' : 'error')
     } catch (e) {
       setStatusNow('测试失败: ' + (e as Error).message, 'error')
