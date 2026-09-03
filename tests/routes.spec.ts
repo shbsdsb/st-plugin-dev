@@ -97,4 +97,27 @@ describe('routes', () => {
     expect(r.json.data.models).toEqual(['deepseek-chat'])
     c.dispose()
   })
+
+  it('test 支持字段入参(未保存也可测): 200 ok:true', async () => {
+    const calls: string[] = []
+    const fetchImpl = (async (url: unknown) => {
+      const u = String(url)
+      calls.push(u)
+      return { status: 200, text: async () => JSON.stringify({ choices: [{ message: { content: 'pong' } }] }) }
+    }) as unknown as typeof fetch
+    const c = capture(db, fetchImpl)
+    const r = await c.call('/api/llm/test', { format: 'openai_compatible', baseUrl: 'x.com/v1', model: 'm', apiKey: 'k' })
+    expect(r.json.ok).toBe(true)
+    expect(r.json.data.ok).toBe(true)
+    expect(calls.some((u) => u.includes('/chat/completions'))).toBe(true)
+    c.dispose()
+  })
+
+  it('test 字段入参缺 model: fail 提示', async () => {
+    const c = capture(db)
+    const r = await c.call('/api/llm/test', { format: 'openai_compatible', baseUrl: 'x.com/v1', apiKey: 'k' })
+    expect(r.json.ok).toBe(false)
+    expect(r.json.message).toEqual(expect.stringContaining('model'))
+    c.dispose()
+  })
 })

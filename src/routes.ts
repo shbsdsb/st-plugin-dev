@@ -114,15 +114,26 @@ export function registerRoutes(register: Register, dep: { db: DatabaseSync; cred
   // /api/llm/test : 真实测试
   add('exact', '/api/llm/test', async (req, res) => {
     try {
-      const b = JSON.parse(await readBody(req)) as { id: number }
-      const p = getPreset(db, Number(b.id))
-      if (!p) return fail(res, '预设不存在')
-      const key = await cred.get(`llm:${p.id}`)
-      if (!key) return fail(res, '未保存密钥')
-      const r = buildTestRequest(p.format, { baseUrl: p.baseUrl, key, model: p.model })
-      const { status, json } = await sendJson({ method: r.method, url: r.url, headers: r.headers, body: r.body }, p.timeout, fetchFn)
+      const b = JSON.parse(await readBody(req)) as {
+        id?: number; format?: string; baseUrl?: string; model?: string; apiKey?: string; timeout?: number
+      }
+      let format: string, baseUrl: string, key: string, model: string, timeout = 30
+      if (b.id) {
+        const p = getPreset(db, Number(b.id))
+        if (!p) return fail(res, '预设不存在')
+        key = (await cred.get(`llm:${p.id}`)) ?? ''
+        if (!key) return fail(res, '未保存密钥')
+        format = p.format; baseUrl = p.baseUrl; model = p.model; timeout = p.timeout
+        if (!model) return fail(res, '该预设未保存模型,请先填写并保存')
+      } else {
+        format = String(b.format ?? ''); baseUrl = String(b.baseUrl ?? '')
+        key = String(b.apiKey ?? ''); model = String(b.model ?? ''); timeout = Number(b.timeout) || 30
+        if (!format || !baseUrl || !model || !key) return fail(res, '请提供 format/baseUrl/model/apiKey(或已保存的 id)')
+      }
+      const r = buildTestRequest(format, { baseUrl, key, model })
+      const { status, json } = await sendJson({ method: r.method, url: r.url, headers: r.headers, body: r.body }, timeout, fetchFn)
       if (status < 200 || status >= 300) return fail(res, `请求失败: HTTP ${status}`)
-      ok(res, { ok: isOk(p.format, json) })
+      ok(res, { ok: isOk(format, json) })
     } catch (e) { fail(res, '请求失败: ' + (e as Error).message) }
   })
 
