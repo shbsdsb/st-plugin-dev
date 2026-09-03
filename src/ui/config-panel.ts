@@ -1,7 +1,9 @@
 // agent_plugin_dev/llm-plugin/src/ui/config-panel.ts
-import { computeAutoValues } from './provider.ts'
+import { createEmptyState, fromRow, applyVendor, checkSave, checkTest } from './state.ts'
+import type { PresetState } from './state.ts'
 import { ensureStyle } from './style.ts'
-import { el, buildModelOptions, setStatus } from './dom.ts'
+import { el, setStatus } from './dom.ts'
+import type { PresetListItem } from './provider.ts'
 
 export interface UiToolsLike {
   pluginModal(opts: { title?: string; content: string | ((el: HTMLElement) => void); actions?: Array<{ label: string; variant?: string; onClick?: () => void }> }): void
@@ -13,22 +15,31 @@ export function createConfigPanel(ui: UiToolsLike, api: typeof import('./api.ts'
   ensureStyle()
   const root = el('div', 'llm')
 
-  // ---- current 状态 ----
-  let currentId = 0
-  let hasKey = false
+  // ===== 内存态(唯一真源;apiKey 只活在表单) =====
+  let state: PresetState = createEmptyState()
+  let rows: PresetListItem[] = []
+  const statusTimer: { ref: ReturnType<typeof setTimeout> | null } = { ref: null }
+  const setStatusNow = (msg: string, type: 'success' | 'error' | 'info') =>
+    setStatus(indicator, statusText, msg, type, statusTimer)
 
-  // ---- 预设区 ----
+  // ===== DOM 骨架 =====
+  // 预设条:下拉 + 改名触发器 + 内联改名条
   const presetSelect = el('select')
-  const renameBtn = el('button', 'text-btn'); renameBtn.textContent = '改名'
-  const presetRow = el('div', 'row-preset'); presetRow.append(presetSelect, renameBtn)
+  const renameTrigger = el('button', 'text-btn'); renameTrigger.textContent = '改名'
+  const renameWrap = el('div', 'preset-rename-inline')
+  const renameInput = el('input') as HTMLInputElement; renameInput.placeholder = '名称'; renameInput.maxLength = 50
+  const renameOk = el('button', 'ok'); renameOk.textContent = '确认'
+  const renameCancel = el('button', 'cancel'); renameCancel.textContent = '取消'
+  renameWrap.append(renameInput, renameOk, renameCancel)
+  const presetRow = el('div', 'row-preset'); presetRow.append(presetSelect, renameWrap, renameTrigger)
 
-  // ---- 操作按钮行 ----
+  // 动作行
   const newBtn = el('button'); newBtn.textContent = '新建'
   const saveBtn = el('button', 'primary'); saveBtn.textContent = '保存'
   const deleteBtn = el('button'); deleteBtn.textContent = '删除'
   const actionRow = el('div', 'row-actions'); actionRow.append(newBtn, saveBtn, deleteBtn)
 
-  // ---- 表单 ----
+  // 表单
   const fg = (label: string, wrap: HTMLElement) => { const g = el('div', 'fg'); const l = document.createElement('label'); l.textContent = label; g.append(l, wrap); return g }
   const formatSelect = el('select')
   for (const [v, t] of [['openai_compatible', 'OpenAI 兼容'], ['anthropic', 'Anthropic'], ['google', 'Google Gemini']] as const) {
@@ -38,27 +49,28 @@ export function createConfigPanel(ui: UiToolsLike, api: typeof import('./api.ts'
   for (const [v, t] of [['', '-- 请选择 --'], ['openai', 'OpenAI'], ['deepseek', 'DeepSeek'], ['zhipu', '智谱AI'], ['qwen', '通义千问'], ['anthropic', 'Anthropic'], ['google', 'Google']] as const) {
     const o = document.createElement('option'); o.value = v; o.textContent = t; vendorSelect.appendChild(o)
   }
-  const baseUrlInput = el('input'); baseUrlInput.placeholder = 'api.example.com/v1'
+  const baseUrlInput = el('input') as HTMLInputElement; baseUrlInput.placeholder = 'api.example.com/v1'
   const baseWrap = el('div', 'iw has-prefix'); const pre = el('span', 'prefix'); pre.textContent = 'https://'; baseWrap.append(pre, baseUrlInput)
 
-  const modelInput = el('input'); modelInput.placeholder = '输入或选择模型…'; modelInput.autocomplete = 'off'
-  const fetchBtn = el('button', 'model-fetch-btn'); const arrow = el('span', 'arrow'); arrow.textContent = '▼'; const label = el('span', 'label-text'); label.textContent = '拉取模型'; fetchBtn.append(arrow, label)
+  const modelInput = el('input') as HTMLInputElement; modelInput.placeholder = '输入或选择模型…'; modelInput.autocomplete = 'off'
+  const fetchBtn = el('button', 'model-fetch-btn')
+  const arrow = el('span', 'arrow'); arrow.textContent = '▼'
+  const label = el('span', 'label-text'); label.textContent = '拉取模型'
+  fetchBtn.append(arrow, label)
   const modelGroup = el('div', 'model-input-group'); modelGroup.append(modelInput, fetchBtn)
   const dropdown = el('div', 'model-dropdown')
   const modelField = el('div', 'model-field'); modelField.append(modelGroup, dropdown)
 
-  const keyInput = el('input'); keyInput.type = 'password'; keyInput.placeholder = 'sk-…'
+  const keyInput = el('input') as HTMLInputElement; keyInput.type = 'password'; keyInput.placeholder = 'sk-…'
   const toggleBtn = el('button', 'toggle'); toggleBtn.textContent = '◉'
   const keyWrap = el('div', 'iw'); keyWrap.append(keyInput, toggleBtn)
-
-  const timeoutInput = el('input'); timeoutInput.type = 'number'; timeoutInput.value = '30'; timeoutInput.min = '1'; timeoutInput.max = '300'
+  const timeoutInput = el('input') as HTMLInputElement; timeoutInput.type = 'number'; timeoutInput.value = '30'; timeoutInput.min = '1'; timeoutInput.max = '300'
 
   const form = el('div'); form.append(
     fg('格式', formatSelect), fg('厂商', vendorSelect), fg('API 地址', baseWrap),
     fg('模型', modelField), fg('密钥', keyWrap), fg('超时（秒）', timeoutInput),
   )
 
-  // ---- 底部:测试 + 指示灯 ----
   const testBtn = el('button', 'btn-test'); testBtn.textContent = '测试'
   const indicator = el('span', 'indicator')
   const statusText = document.createElement('span'); statusText.className = 'indicator-text'; statusText.textContent = '就绪'
@@ -67,105 +79,143 @@ export function createConfigPanel(ui: UiToolsLike, api: typeof import('./api.ts'
 
   root.append(presetRow, actionRow, form, bottomRow)
 
-  // ---- 函数:表单值收集/填充 ----
-  function presetInput(presetId: number): Record<string, unknown> {
-    const key = keyInput.value.trim()
-    return {
-      presetName: presetSelect.value, format: formatSelect.value, vendor: vendorSelect.value,
-      baseUrl: baseUrlInput.value.trim(), model: modelInput.value.trim(), timeout: Number(timeoutInput.value) || 30,
-      ...(key ? { apiKey: key } : {}),
-    }
-  }
-  function fillForm(p: { presetName: string; format: string; vendor: string; baseUrl: string; model: string; timeout: number; hasKey: boolean }): void {
-    presetSelect.value = p.presetName
-    formatSelect.value = p.format
-    vendorSelect.value = p.vendor
-    applyVendorAuto()
-    if (p.vendor) { baseUrlInput.value = p.baseUrl; baseUrlInput.disabled = true; formatSelect.disabled = true }
-    else { baseUrlInput.value = p.baseUrl; baseUrlInput.disabled = false; formatSelect.disabled = false }
-    modelInput.value = p.model
-    timeoutInput.value = String(p.timeout)
+  // ===== 状态 → 表单 / 表单 → 状态 =====
+  function applyStateToForm(): void {
+    formatSelect.value = state.format
+    vendorSelect.value = state.vendor
+    baseUrlInput.value = state.baseUrl
+    modelInput.value = state.model
+    timeoutInput.value = String(state.timeout)
     keyInput.value = ''
-    hasKey = p.hasKey
-    keyInput.placeholder = p.hasKey ? '留空保留原密钥' : 'sk-…'
+    keyInput.placeholder = state.hasKey ? '留空保留原密钥' : 'sk-…'
+    const locked = !!state.vendor
+    baseUrlInput.disabled = locked; formatSelect.disabled = locked
   }
-  function applyVendorAuto(): void {
-    const { baseUrl, format } = computeAutoValues(vendorSelect.value)
-    if (vendorSelect.value) {
-      baseUrlInput.value = baseUrl; baseUrlInput.disabled = true
-      formatSelect.value = format; formatSelect.disabled = true
-    } else {
-      baseUrlInput.value = ''; baseUrlInput.disabled = false; formatSelect.disabled = false
-    }
+  function collectFormIntoState(): void {
+    state.format = formatSelect.value
+    state.vendor = vendorSelect.value
+    state.baseUrl = baseUrlInput.value.trim()
+    state.model = modelInput.value.trim()
+    state.timeout = Number(timeoutInput.value) || 30
   }
 
-  // ---- 预设加载 ----
-  async function loadPresets(): Promise<void> {
-    const rows = await api.listPresets()
+  // ===== 预设下拉(仅导航:id 驱动,永不写文本) =====
+  function syncOptions(): void {
+    const keep = state.id !== null ? String(state.id) : ''
     presetSelect.innerHTML = ''
-    for (const r of rows) { const o = document.createElement('option'); o.value = String(r.id); o.textContent = r.presetName; presetSelect.appendChild(o) }
-    if (rows.length > 0) {
-      const target = currentId > 0 && rows.some((r) => r.id === currentId) ? currentId : rows[0].id
-      await selectPreset(target)
-    } else { currentId = 0; hasKey = false; resetForm() }
-  }
-  async function selectPreset(id: number): Promise<void> {
-    currentId = id
-    const p = (await api.listPresets()).find((r) => r.id === id)
-    if (p) fillForm(p)
-  }
-  function resetForm(): void {
-    let o = Array.from(presetSelect.options).find((x) => x.value === '新预设')
-    if (!o) { o = document.createElement('option'); o.value = '新预设'; o.textContent = '新预设'; presetSelect.appendChild(o) }
-    presetSelect.value = '新预设'
-    vendorSelect.value = ''
-    baseUrlInput.value = ''; baseUrlInput.disabled = false; formatSelect.disabled = false
-    formatSelect.value = 'openai_compatible'
-    modelInput.value = ''; keyInput.value = ''; timeoutInput.value = '30'; hasKey = false
-    setStatus(indicator, statusText, '就绪', 'info')
-  }
-
-  presetSelect.addEventListener('change', () => void selectPreset(Number(presetSelect.value)))
-  renameBtn.addEventListener('click', async () => {
-    if (currentId === 0) { setStatus(indicator, statusText, '请先保存预设再改名', 'error'); return }
-    const name = window.prompt('重命名预设', presetSelect.value)
-    if (name && name.trim() && name.trim() !== presetSelect.value) {
-      try {
-        await api.updatePreset(currentId, { ...presetInput(currentId), presetName: name.trim() })
-        ui.toast('已改名')
-        await loadPresets()
-        setStatus(indicator, statusText, '已改名', 'success')
-      } catch (e) { setStatus(indicator, statusText, '改名失败: ' + (e as Error).message, 'error') }
+    if (state.id === null) {
+      const o = document.createElement('option'); o.value = ''; o.textContent = state.name; presetSelect.appendChild(o)
     }
+    for (const r of rows) {
+      const o = document.createElement('option'); o.value = String(r.id); o.textContent = r.presetName; presetSelect.appendChild(o)
+    }
+    presetSelect.value = keep
+  }
+  presetSelect.addEventListener('change', () => {
+    const v = presetSelect.value
+    if (!v) return
+    const row = rows.find((r) => r.id === Number(v))
+    if (row) { state = fromRow(row); applyStateToForm(); setStatusNow('已加载', 'info') }
   })
-  vendorSelect.addEventListener('change', () => { applyVendorAuto(); if (modelInput.value) modelInput.value = '' })
 
-  // ---- 保存 ----
-  saveBtn.addEventListener('click', async () => {
-    if (!presetSelect.value || !baseUrlInput.value.trim() || !modelInput.value.trim()) { setStatus(indicator, statusText, '请完整填写预设名/地址/模型', 'error'); return }
-    const input = presetInput(0)
+  // ===== 内联改名(demo 行为;无 window.prompt) =====
+  function enterRename(): void {
+    renameInput.value = state.name
+    presetRow.classList.add('renaming')
+    presetSelect.style.display = 'none'; renameTrigger.style.display = 'none'; renameWrap.classList.add('active')
+    renameInput.focus(); renameInput.select()
+  }
+  function exitRename(save: boolean): void {
+    presetRow.classList.remove('renaming')
+    presetSelect.style.display = ''; renameTrigger.style.display = ''; renameWrap.classList.remove('active')
+    if (!save) return
+    const next = renameInput.value.trim()
+    if (!next || next === state.name) return
+    const old = state.name
+    state.name = next
+    if (state.id === null) { syncOptions(); setStatusNow('已改名(保存后生效)', 'info'); return }
+    syncOptions()
+    api.updatePreset(state.id, { ...state, apiKey: '' })
+      .then(() => {
+        const row = rows.find((r) => r.id === state.id)
+        if (row) row.presetName = state.name
+        syncOptions()
+        setStatusNow('已改名', 'success')
+      })
+      .catch((e) => { state.name = old; syncOptions(); setStatusNow('改名失败: ' + (e as Error).message, 'error') })
+  }
+  renameTrigger.addEventListener('click', enterRename)
+  renameOk.addEventListener('click', () => exitRename(true))
+  renameCancel.addEventListener('click', () => exitRename(false))
+  renameInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') exitRename(true)
+    else if (e.key === 'Escape') exitRename(false)
+  })
+
+  // ===== 新建(无弹窗,直进空态) =====
+  function newPreset(): void {
+    state = createEmptyState()
+    applyStateToForm()
+    syncOptions()
+    setStatusNow('已新建', 'info')
+  }
+  newBtn.addEventListener('click', newPreset)
+
+  // ===== 保存(按钮锁 + rowid 覆盖) =====
+  async function save(): Promise<void> {
+    collectFormIntoState()
+    const key = keyInput.value.trim()
+    const chk = checkSave(state, key)
+    if (!chk.ok) {
+      const target = chk.field === 'baseUrl' ? baseUrlInput : chk.field === 'model' ? modelInput : keyInput
+      target.focus()
+      setStatusNow(chk.field === 'apiKey' ? '请先输入 API Key' : '请完整填写地址/模型', 'error')
+      return
+    }
+    saveBtn.disabled = true; saveBtn.textContent = '保存中…'
     try {
-      if (currentId === 0) { const { id } = await api.createPreset({ ...input, apiKey: keyInput.value.trim() }); currentId = id }
-      else { await api.updatePreset(currentId, input) }
-      ui.toast('已保存')
-      setStatus(indicator, statusText, '已保存', 'success')
-      await loadPresets()
-    } catch (e) { setStatus(indicator, statusText, '保存失败: ' + (e as Error).message, 'error') }
-  })
+      if (state.id === null) {
+        const body = { ...state, presetName: state.name, apiKey: key }
+        const { id } = await api.createPreset(body)
+        state.id = id; state.hasKey = !!key
+      } else {
+        await api.updatePreset(state.id, { ...state, presetName: state.name, ...(key ? { apiKey: key } : {}) })
+        if (key) state.hasKey = true
+      }
+      rows = await api.listPresets()
+      syncOptions()
+      setStatusNow('已保存', 'success'); ui.toast('已保存')
+    } catch (e) {
+      setStatusNow('保存失败: ' + (e as Error).message, 'error')
+    } finally {
+      saveBtn.disabled = false; saveBtn.textContent = '保存'
+    }
+  }
+  saveBtn.addEventListener('click', () => void save())
 
-  // ---- 新建 / 删除 ----
-  newBtn.addEventListener('click', () => {
-    ui.modal({ title: '新建', desc: '新建将清空当前表单,是否继续?', onOk: () => { currentId = 0; resetForm(); setStatus(indicator, statusText, '请选择厂商并填写', 'info') } })
-  })
-  deleteBtn.addEventListener('click', () => {
-    if (currentId === 0) { setStatus(indicator, statusText, '无已选预设', 'error'); return }
-    ui.modal({ title: '删除', desc: '确定删除当前预设?', onOk: async () => { await api.deletePreset(currentId); currentId = 0; await loadPresets() } })
-  })
+  // ===== 删除(宿主 modal 确认;空态提示) =====
+  function removeCurrent(): void {
+    if (state.id === null) { setStatusNow('没有可删除的预设', 'error'); return }
+    const id = state.id; const name = state.name
+    ui.modal({
+      title: '删除预设', desc: `确定删除「${name}」?`,
+      onOk: () => {
+        api.deletePreset(id)
+          .then(async () => {
+            rows = (await api.listPresets()).filter((r) => r.id !== id)
+            if (rows.length > 0) { state = fromRow(rows[0]); applyStateToForm() } else { state = createEmptyState(); applyStateToForm() }
+            syncOptions(); setStatusNow('已删除', 'info')
+          })
+          .catch((e) => setStatusNow('删除失败: ' + (e as Error).message, 'error'))
+      },
+    })
+  }
+  deleteBtn.addEventListener('click', removeCurrent)
 
-  // ---- 模型拉取 ----
+  // ===== 拉取模型(当前表单;key 空回退 credential) =====
   function renderDropdown(models: string[], current: string): void {
     dropdown.innerHTML = ''
-    const opts = buildModelOptions(models, current)
+    const opts = models.map((name) => ({ name, active: name === current }))
     if (opts.length === 0) { const e = el('div', 'empty'); e.textContent = '没有可用模型'; dropdown.appendChild(e); return }
     for (const o of opts) {
       const item = el('div', 'item' + (o.active ? ' active' : ''))
@@ -177,36 +227,76 @@ export function createConfigPanel(ui: UiToolsLike, api: typeof import('./api.ts'
     }
   }
   async function openModels(): Promise<void> {
+    collectFormIntoState()
     const willShow = !dropdown.classList.contains('show')
     dropdown.classList.toggle('show', willShow)
     arrow.classList.toggle('open', willShow)
     if (!willShow) return
-    const format = formatSelect.value
-    const baseUrl = baseUrlInput.value.trim()
-    const apiKey = keyInput.value.trim()
-    if (!baseUrl) { setStatus(indicator, statusText, '请先填 API 地址', 'error'); return }
-    if (!apiKey) { setStatus(indicator, statusText, '请先填密钥', 'error'); return }
+    if (!state.baseUrl) { setStatusNow('请先填 API 地址', 'error'); return }
+    const key = keyInput.value.trim()
+    fetchBtn.disabled = true; fetchBtn.style.opacity = '0.6'
     try {
-      const list = await api.fetchModelsByInput({ format, baseUrl, apiKey })
+      const list = key
+        ? await api.fetchModelsByInput({ format: state.format, baseUrl: state.baseUrl, apiKey: key })
+        : state.id !== null
+          ? await api.fetchModels(state.id)
+          : (() => { throw new Error('API_KEY_NEEDED') })()
       renderDropdown(list, modelInput.value)
-    } catch (e) { setStatus(indicator, statusText, '拉取失败: ' + (e as Error).message, 'error') }
+    } catch (e) {
+      dropdown.classList.remove('show'); arrow.classList.remove('open')
+      const msg = (e as Error).message
+      setStatusNow(msg === 'API_KEY_NEEDED' || /密钥/.test(msg) ? '请先输入 API Key' : '拉取失败: ' + msg, 'error')
+    } finally {
+      fetchBtn.disabled = false; fetchBtn.style.opacity = ''
+    }
   }
   fetchBtn.addEventListener('click', () => void openModels())
 
-  // ---- 测试 ----
-  testBtn.addEventListener('click', async () => {
-    if (!currentId) { setStatus(indicator, statusText, '请先保存预设再测试', 'error'); return }
+  // ===== 测试(指示灯;error 常驻) =====
+  async function runTest(): Promise<void> {
+    collectFormIntoState()
+    const key = keyInput.value.trim()
+    const chk = checkTest(state, { format: state.format, baseUrl: state.baseUrl, model: state.model }, key)
+    if ('missing' in chk) {
+      const target = chk.missing === 'baseUrl' ? baseUrlInput : chk.missing === 'model' ? modelInput : keyInput
+      target.focus()
+      setStatusNow(chk.missing === 'apiKey' ? '请先输入 API Key 或保存预设' : '请填写有效信息', 'error')
+      return
+    }
     testBtn.disabled = true; testBtn.textContent = '测试中…'
     try {
-      const ok = await api.testPreset({ id: currentId })
-      setStatus(indicator, statusText, ok ? '连接成功' : '返回异常', ok ? 'success' : 'error')
-    } catch (e) { setStatus(indicator, statusText, '测试失败: ' + (e as Error).message, 'error') }
-    testBtn.disabled = false; testBtn.textContent = '测试'
-  })
+      const ok = await (chk.mode === 'id'
+        ? api.testPreset({ id: state.id as number })
+        : api.testPreset({ format: state.format, baseUrl: state.baseUrl, model: state.model, apiKey: key }))
+      setStatusNow(ok ? '连接成功' : '返回异常', ok ? 'success' : 'error')
+    } catch (e) {
+      setStatusNow('测试失败: ' + (e as Error).message, 'error')
+    } finally {
+      testBtn.disabled = false; testBtn.textContent = '测试'
+    }
+  }
+  testBtn.addEventListener('click', () => void runTest())
 
-  // ---- 密钥显隐 ----
+  // 厂商联动:自动 URL/格式 + 锁输入 + 清模型
+  vendorSelect.addEventListener('change', () => {
+    state = applyVendor(state, vendorSelect.value)
+    baseUrlInput.value = state.baseUrl
+    formatSelect.value = state.format
+    const locked = !!state.vendor
+    baseUrlInput.disabled = locked; formatSelect.disabled = locked
+    if (modelInput.value) modelInput.value = ''
+    state.model = ''
+  })
   toggleBtn.addEventListener('click', () => { keyInput.type = keyInput.type === 'password' ? 'text' : 'password' })
 
-  void loadPresets()
+  // ===== 初始化 =====
+  void (async () => {
+    try {
+      rows = await api.listPresets()
+      if (rows.length > 0) { state = fromRow(rows[0]); applyStateToForm() } else { state = createEmptyState(); applyStateToForm() }
+    } catch (e) { setStatusNow('加载失败: ' + (e as Error).message, 'error') }
+    syncOptions()
+  })()
+
   return root
 }
