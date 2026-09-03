@@ -2,16 +2,6 @@
 // 前端工具库:13 种简约黑白灰悬浮工具(创建/显示/关闭)。
 // 视觉全部由注入的基础 <style> 控制(简约:白底 + 细边框 + 小圆角,toast/tooltip 深色),JS 只负责结构/交互。
 const STYLE_ID = 'ui-tool-plugin-tools'
-/** 移动端补充样式:触屏 tap-highlight、响应式宽度、safe-area;由 ensureStyle 模板插值合入基础样式 */
-export const TOOLS_MOBILE_CSS = `
-@media (hover:none){.fw{-webkit-tap-highlight-color:transparent;}}
-@media (max-width: 768px){
-  .fw-prog{width:min(240px,90vw);}
-  .fw{max-width:min(92vw,480px);}
-  .fw-sheet{padding-bottom:calc(12px + env(safe-area-inset-bottom,0px));}
-  .fw-mask{padding-left:max(12px,env(safe-area-inset-left,0px));padding-right:max(12px,env(safe-area-inset-right,0px));}
-}
-`
 const active: HTMLElement[] = []
 /** 遮罩类节点集合:新开时关闭旧的 */
 const masked: HTMLElement[] = []
@@ -71,7 +61,6 @@ function ensureStyle(): void {
 .fw-center .big{width:44px;height:44px;border-radius:50%;background:#333;color:#fff;font-size:18px;display:flex;align-items:center;justify-content:center;margin-bottom:6px;}
 @keyframes ui-tool-pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.1)}}
 .badge-dot{position:absolute;top:-6px;right:-6px;background:#d9534f;color:#fff;border-radius:10px;padding:1px 6px;font-size:10px;font-weight:600;border:1px solid #fff;animation:ui-tool-pulse 1.8s infinite;}
-${TOOLS_MOBILE_CSS}
 `
   document.head.appendChild(style)
 }
