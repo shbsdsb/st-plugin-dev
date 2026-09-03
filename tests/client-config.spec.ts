@@ -1,5 +1,5 @@
 import { describe, expect, it, afterEach } from 'vitest'
-import { readClientConfig } from '../src/use-is-mobile.ts'
+import { readClientConfig } from '../src/client-config.ts'
 
 function setWindow(v: unknown): void {
   ;(globalThis as Record<string, unknown>).window = v

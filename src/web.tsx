@@ -3,7 +3,7 @@ import React from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { SlotRegistry, type SlotName } from './slots.ts'
 import { Layout } from './layout.tsx'
-import { readClientConfig } from './use-is-mobile.ts'
+import { readClientConfig } from './client-config.ts'
 
 export default {
   name: 'st-ui-slots',

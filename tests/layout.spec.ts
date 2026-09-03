@@ -8,21 +8,21 @@ function html(props: Record<string, unknown>): string {
   return renderToStaticMarkup(React.createElement(Layout, { registry: new SlotRegistry(), ...props }))
 }
 
-describe('Layout mobile', () => {
-  it('mobile default keeps collapsed rail + hamburger, no same-layer sidebar', () => {
-    const s = html({ isMobile: true })
-    expect(s).toContain('data-mobile-open-left')
-    expect(s).toContain('data-slots-rail="left"')
-    expect(s).not.toContain('data-slot="sidebar-left"')
-  })
-  it('mobile showCollapsedRail=false hides collapsed rail, keeps hamburger', () => {
-    const s = html({ isMobile: true, showCollapsedRail: false })
-    expect(s).not.toContain('data-slots-rail="left"')
-    expect(s).toContain('data-mobile-open-left')
-  })
-  it('desktop keeps same-layer sidebar (no mobile buttons)', () => {
+describe('Layout desktop', () => {
+  it('renders same-layer sidebars + main + nav', () => {
     const s = html({})
     expect(s).toContain('data-slot="sidebar-left"')
-    expect(s).not.toContain('data-mobile-open-left')
+    expect(s).toContain('data-slot="sidebar-right"')
+    expect(s).toContain('data-slot="main"')
+    expect(s).toContain('data-slot="nav"')
+  })
+  it('collapsed + showCollapsedRail=false hides 40px rail', () => {
+    const s = html({ leftCollapsed: true, showCollapsedRail: false })
+    expect(s).not.toContain('data-slot="sidebar-left"') // 窄条被隐藏
+    expect(s).toContain('data-slot="main"')
+  })
+  it('collapsed default shows 40px rail', () => {
+    const s = html({ leftCollapsed: true })
+    expect(s).toContain('data-slot="sidebar-left"')
   })
 })
