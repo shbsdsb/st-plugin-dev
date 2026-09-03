@@ -1,2 +1,4 @@
-llm-plugin:
-  bundle: ./lib/index.js
+# llm-plugin bundle patch(insert 语法声明条目)
+- insert:
+  - name: llm-plugin
+    id: llm-plugin
