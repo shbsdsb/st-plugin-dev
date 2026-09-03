@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { buildModelOptions } from '../src/ui/config-panel.ts'
+import { buildModelOptions } from '../src/ui/dom.ts'
 
 describe('config-panel', () => {
   it('buildModelOptions 按当前值标记 active', () => {
