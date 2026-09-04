@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { DatabaseSync } from 'node:sqlite'
-import { initPresets, createPreset, listPresets, getPreset, updatePreset, deletePreset, type PresetInput } from '../src/db.ts'
+import { initPresets, createPreset, listPresets, getPreset, updatePreset, deletePreset, getActivePresetId, setActivePresetId, clearIfActivePreset, type PresetInput } from '../src/db.ts'
 
 const input: PresetInput = { presetName: '默认', format: 'openai_compatible', vendor: 'deepseek', baseUrl: 'api.deepseek.com/v1', model: 'deepseek-chat', timeout: 30 }
 
@@ -37,5 +37,27 @@ describe('db', () => {
   it('update/delete 不存在的 id 返回 false', () => {
     expect(updatePreset(db, 999, input)).toBe(false)
     expect(deletePreset(db, 999)).toBe(false)
+  })
+})
+
+describe('active_preset', () => {
+  let db: DatabaseSync
+  beforeEach(() => { db = new DatabaseSync(':memory:'); initPresets(db) })
+
+  it('无 active 时返回 null', () => {
+    expect(getActivePresetId(db)).toBeNull()
+  })
+  it('set 后返回该 id,再次 set 覆盖', () => {
+    setActivePresetId(db, 3)
+    setActivePresetId(db, 5)
+    expect(getActivePresetId(db)).toBe(5)
+  })
+  it('clearIfActivePreset 命中则清空,未命中保留', () => {
+    setActivePresetId(db, 7)
+    clearIfActivePreset(db, 7)
+    expect(getActivePresetId(db)).toBeNull()
+    setActivePresetId(db, 7)
+    clearIfActivePreset(db, 99)
+    expect(getActivePresetId(db)).toBe(7)
   })
 })

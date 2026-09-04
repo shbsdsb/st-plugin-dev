@@ -26,6 +26,10 @@ export function initPresets(db: DatabaseSync): void {
     timeout INTEGER NOT NULL DEFAULT 30,
     updatedAt TEXT NOT NULL
   )`)
+  db.exec(`CREATE TABLE IF NOT EXISTS active_preset (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    preset_id INTEGER NOT NULL
+  )`)
 }
 
 function rowToPreset(r: Record<string, unknown>): Preset {
@@ -69,4 +73,17 @@ export function updatePreset(db: DatabaseSync, id: number, input: PresetInput): 
 export function deletePreset(db: DatabaseSync, id: number): boolean {
   const res = db.prepare('DELETE FROM presets WHERE id=?').run(id)
   return Number(res.changes) > 0
+}
+
+export function getActivePresetId(db: DatabaseSync): number | null {
+  const r = db.prepare('SELECT preset_id FROM active_preset WHERE id = 1').get() as { preset_id?: number } | undefined
+  return r && typeof r.preset_id === 'number' ? r.preset_id : null
+}
+
+export function setActivePresetId(db: DatabaseSync, id: number): void {
+  db.prepare('INSERT INTO active_preset (id, preset_id) VALUES (1, ?) ON CONFLICT(id) DO UPDATE SET preset_id = excluded.preset_id').run(id)
+}
+
+export function clearIfActivePreset(db: DatabaseSync, id: number): void {
+  db.prepare('DELETE FROM active_preset WHERE id = 1 AND preset_id = ?').run(id)
 }
