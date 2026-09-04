@@ -25,15 +25,18 @@ export function apply(ctx: Context, _config: Record<string, unknown>) {
   let db: import('node:sqlite').DatabaseSync | null = null
   let disposeRoutes: (() => void) | null = null
   ctx.effect(async () => {
+    let disposePrompt: (() => void) | null = null
     try {
       db = await ctx.persistDb.open('data/llm/presets.db')
       initPresets(db)
-      ctx.llmPrompt = createLlmPromptService({ db, cred: ctx.credential })
+      // ctx.provide 注册服务槽(runtime 后直接 ctx.xxx= 会抛 "cannot set ... without provide")
+      disposePrompt = ctx.provide('llmPrompt', createLlmPromptService({ db, cred: ctx.credential }))
       disposeRoutes = registerRoutes(ctx.webServer.register.bind(ctx.webServer), { db, cred: ctx.credential })
       return () => {
         disposeRoutes?.()
         disposeRoutes = null
-        ctx.llmPrompt = null as never
+        disposePrompt?.()
+        disposePrompt = null
         db?.close()
         db = null
       }

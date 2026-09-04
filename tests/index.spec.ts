@@ -28,6 +28,7 @@ describe('llm-plugin 接线', () => {
       persistDb: { open: async () => { opened += 1; return db } },
       webServer: { register: (o: { path: string }) => { registered.push(o.path); return () => {} } },
       credential: { set: async () => {}, get: async () => null, delete: async () => {} },
+      provide: () => () => {},
     } as never
     ;(apply as (c: unknown, cfg: unknown) => void)(ctx, {})
     await new Promise((r) => setTimeout(r, 0))
