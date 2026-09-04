@@ -142,7 +142,8 @@ export function createStore(persist: PersistJsonLike): PromptStore {
         if (!raw || typeof raw !== 'object') continue // 条目文件缺失 → 跳过
         const e = raw as Partial<Entry>
         if (typeof e.id !== 'string' || typeof e.text !== 'string') continue
-        entries.push({ id: e.id, name: typeof e.name === 'string' ? e.name : '未命名', role: e.role ?? 'user', text: e.text })
+        const role = (VALID_ROLES as string[]).includes(e.role as string) ? e.role as EntryRole : 'user'
+        entries.push({ id: e.id, name: typeof e.name === 'string' ? e.name : '未命名', role, text: e.text })
       }
       return buildMessages(entries)
     },
