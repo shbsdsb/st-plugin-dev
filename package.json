@@ -1,0 +1,24 @@
+{
+  "name": "persist",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "后端持久化服务:json/env/sqlite/Windows 凭据管理器的保存与读取(落盘须在 $ST_HOME 下)",
+  "main": "lib/index.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "cordis": "file:../../agent_plugin_feat/vendor/cordis"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "^5.7.3",
+    "vitest": "^4.1.11"
+  },
+  "st": {
+    "bundle": { "patch": "./cordis.patch.yml" }
+  }
+}

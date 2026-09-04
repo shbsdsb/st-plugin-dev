@@ -1,16 +1,18 @@
-# 白名单式 .gitignore:默认忽略一切,仅显式放行源码与配置文件。
+# 白名单式 .gitignore:默认忽略一切,仅显式放行源码与配置。
 # 规则顺序:先 `*` 忽略所有文件,再用 `!` 反向放行。
+# 注意:带 `/` 前缀的模式仅匹配仓库根,避免误放行 node_modules 等深层的同名校名文件。
 *
 !*/
-!src/
-!src/**
-!tests/
-!tests/**
-!package.json
-!package-lock.json
-!pnpm-lock.yaml
-!tsconfig.json
-!vitest.config.ts
-!cordis.patch.yml
-!README.md
-!.gitignore
+!/src/
+!/src/**
+!/tests/
+!/tests/**
+!/lib/
+!/lib/**
+!/package.json
+!/pnpm-lock.yaml
+!/tsconfig.json
+!/vitest.config.ts
+!/cordis.patch.yml
+!/README.md
+!/.gitignore
