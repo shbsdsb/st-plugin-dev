@@ -1,0 +1,4 @@
+# prompt-plugin bundle patch(insert 语法声明条目)
+- insert:
+  - name: prompt-plugin
+    id: prompt-plugin
