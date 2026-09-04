@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { apiFetch, listPresets, testPreset } from '../src/ui/api.ts'
+import { apiFetch, listPresets, testPreset, setActive, getActive } from '../src/ui/api.ts'
 
 describe('api', () => {
   it('apiFetch 解析响应', async () => {
@@ -32,6 +32,23 @@ describe('api', () => {
   it('testPreset ok:false 抛错', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => ({ ok: false, message: '请求失败: HTTP 401' }) })))
     await expect(testPreset({ id: 1 })).rejects.toThrow('HTTP 401')
+    vi.unstubAllGlobals()
+  })
+
+  it('setActive PUT /api/llm/active body {id:3}', async () => {
+    const fetchMock = vi.fn(async (_url: unknown, _init?: unknown) => ({ ok: true, json: async () => ({ ok: true, data: { id: 3 } }) }))
+    vi.stubGlobal('fetch', fetchMock)
+    await expect(setActive(3)).resolves.toBeUndefined()
+    const [url, init] = fetchMock.mock.calls[0] as [string, { method?: string; body?: string }]
+    expect(url).toBe('/api/llm/active')
+    expect(init.method).toBe('PUT')
+    expect(JSON.parse(init.body ?? '')).toEqual({ id: 3 })
+    vi.unstubAllGlobals()
+  })
+
+  it('getActive 返回 data.id', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => ({ ok: true, data: { id: 3 } }) })))
+    await expect(getActive()).resolves.toBe(3)
     vi.unstubAllGlobals()
   })
 })

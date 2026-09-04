@@ -54,3 +54,15 @@ export function testPreset(target: TestTarget): Promise<boolean> {
   return apiFetch('/api/llm/test', { method: 'POST', body: JSON.stringify(target) })
     .then((r) => { if (!r.ok) throw new Error(r.message || '测试失败'); return !!(r.data as { ok?: boolean })?.ok })
 }
+
+export function setActive(id: number): Promise<void> {
+  return apiFetch('/api/llm/active', { method: 'PUT', body: JSON.stringify({ id }) })
+    .then((r) => { if (!r.ok) throw new Error(r.message || '设置当前预设失败') })
+}
+
+export function getActive(): Promise<number | null> {
+  return apiFetch('/api/llm/active').then((r) => {
+    if (!r.ok) throw new Error(r.message || '读取当前预设失败')
+    return (r.data as { id: number | null }).id
+  })
+}

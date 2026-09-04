@@ -112,11 +112,13 @@ export function createConfigPanel(ui: UiToolsLike, api: typeof import('./api.ts'
     }
     presetSelect.value = keep
   }
+  // 载入已存预设后上报激活(fire-and-forget;失败静默;空态不触发)
+  const activateCurrent = () => { if (state.id != null) void api.setActive(state.id).catch(() => {}) }
   presetSelect.addEventListener('change', () => {
     const v = presetSelect.value
     if (!v) return
     const row = rows.find((r) => r.id === Number(v))
-    if (row) { state = fromRow(row); applyStateToForm(); setStatusNow('已加载', 'info') }
+    if (row) { state = fromRow(row); applyStateToForm(); setStatusNow('已加载', 'info'); activateCurrent() }
   })
 
   // ===== 内联改名(demo 行为;无 window.prompt) =====
@@ -204,7 +206,7 @@ export function createConfigPanel(ui: UiToolsLike, api: typeof import('./api.ts'
         api.deletePreset(id)
           .then(async () => {
             rows = (await api.listPresets()).filter((r) => r.id !== id)
-            if (rows.length > 0) { state = fromRow(rows[0]); applyStateToForm() } else { state = createEmptyState(); applyStateToForm() }
+            if (rows.length > 0) { state = fromRow(rows[0]); applyStateToForm(); activateCurrent() } else { state = createEmptyState(); applyStateToForm() }
             syncOptions(); setStatusNow('已删除', 'info')
           })
           .catch((e) => setStatusNow('删除失败: ' + (e as Error).message, 'error'))
@@ -294,7 +296,7 @@ export function createConfigPanel(ui: UiToolsLike, api: typeof import('./api.ts'
   void (async () => {
     try {
       rows = await api.listPresets()
-      if (rows.length > 0) { state = fromRow(rows[0]); applyStateToForm() } else { state = createEmptyState(); applyStateToForm() }
+      if (rows.length > 0) { state = fromRow(rows[0]); applyStateToForm(); activateCurrent() } else { state = createEmptyState(); applyStateToForm() }
     } catch (e) { setStatusNow('加载失败: ' + (e as Error).message, 'error') }
     syncOptions()
   })()
