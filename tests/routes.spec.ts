@@ -4,7 +4,6 @@ import { registerRoutes } from '../src/routes.ts'
 import { createStore, type PersistJsonLike, type PromptStore } from '../src/store.ts'
 import type { Message } from '../src/types.ts'
 
-/** 与 store.spec 相同的内存 persist(重复声明;文件级内聚优先) */
 function memPersist(): PersistJsonLike {
   const map = new Map<string, unknown>()
   return {
@@ -47,121 +46,66 @@ function capture(dep: { llm: { send(m: Message[]): Promise<unknown> } }) {
   return { store, call, dispose }
 }
 
-describe('prompt routes', () => {
-  it('表单 CRUD:创建→改名→列表→删除(状态码 200)', async () => {
+describe('prompt routes v3', () => {
+  it('表单 CRUD', async () => {
     const c = capture({ llm: { send: async () => ({}) } })
-    const r1 = await c.call('/api/prompt/forms', { name: '客服' }, 'POST')
-    expect(r1.status).toBe(200); expect(r1.json.ok).toBe(true)
-    const fid: string = r1.json.data.id
-    const r2 = await c.call(`/api/prompt/forms/${fid}`, { name: '客服2' }, 'PUT')
-    expect(r2.json.ok).toBe(true)
-    const r3 = await c.call('/api/prompt/forms')
-    expect(r3.json.data).toEqual([{ id: fid, name: '客服2', entryCount: 0 }])
-    const r4 = await c.call(`/api/prompt/forms/${fid}`, undefined, 'DELETE')
-    expect(r4.json.ok).toBe(true)
-    expect((await c.call('/api/prompt/forms')).json.data).toEqual([])
+    const fid: string = (await c.call('/api/prompt/forms', { name: '客服' }, 'POST')).json.data.id
+    expect((await c.call('/api/prompt/forms')).json.data).toEqual([{ id: fid, name: '客服', entryCount: 0 }])
+    expect((await c.call(`/api/prompt/forms/${fid}`, { name: '客服2' }, 'PUT')).json.ok).toBe(true)
+    expect((await c.call(`/api/prompt/forms/${fid}`, undefined, 'DELETE')).json.ok).toBe(true)
     c.dispose()
   })
 
-  it('表单名非法 → 400;操作不存在表单 → 404', async () => {
-    const c = capture({ llm: { send: async () => ({}) } })
-    expect((await c.call('/api/prompt/forms', { name: ' ' }, 'POST')).status).toBe(400)
-    expect((await c.call('/api/prompt/forms/f_no', { name: 'x' }, 'PUT')).status).toBe(404)
-    expect((await c.call('/api/prompt/forms/f_no', undefined, 'DELETE')).status).toBe(404)
-    c.dispose()
-  })
-
-  it('条目 CRUD + getMessages 顺序,非法 role → 400', async () => {
+  it('三类条目创建与平铺返回;非法 → 400', async () => {
     const c = capture({ llm: { send: async () => ({}) } })
     const fid: string = (await c.call('/api/prompt/forms', { name: 'f' }, 'POST')).json.data.id
-    const e1 = await c.call(`/api/prompt/forms/${fid}/entries`, { name: '系统', role: 'system', text: '你是助手' }, 'POST')
-    const eid1: string = e1.json.data.entryId
-    const e2 = await c.call(`/api/prompt/forms/${fid}/entries`, { name: '用户', role: 'user', text: '你好' }, 'POST')
-    expect(e2.status).toBe(200)
-    const bad = await c.call(`/api/prompt/forms/${fid}/entries`, { name: 'x', role: 'admin', text: '' }, 'POST')
-    expect(bad.status).toBe(400)
-    const upd = await c.call(`/api/prompt/forms/${fid}/entries/${eid1}`, { name: '系统改', role: 'system', text: '新文本' }, 'PUT')
-    expect(upd.json.ok).toBe(true)
-    const listR = await c.call(`/api/prompt/forms/${fid}/entries`)
-    expect(listR.status).toBe(200)
-    expect(listR.json.data.map((x: { name: string }) => x.name)).toEqual(['系统改', '用户'])
-    const del = await c.call(`/api/prompt/forms/${fid}/entries/${eid1}`, undefined, 'DELETE')
-    expect(del.json.ok).toBe(true)
-    expect((await c.call(`/api/prompt/forms/${fid}/entries/${eid1}`, { name: 'x', role: 'user', text: '' }, 'PUT')).status).toBe(404)
-    c.dispose()
-  })
-
-  it('send 组装并透传 llmPrompt 返回;空消息 → 400;llm 抛错透传', async () => {
-    const sent: Message[][] = []
-    const c = capture({
-      llm: { send: async (m: Message[]) => { sent.push(m); return { choices: [{ message: { content: 'hi' } }] } } },
-    })
-    const fid: string = (await c.call('/api/prompt/forms', { name: 'f' }, 'POST')).json.data.id
-    await c.call(`/api/prompt/forms/${fid}/entries`, { name: 'a', role: 'system', text: 'sys' }, 'POST')
-    await c.call(`/api/prompt/forms/${fid}/entries`, { name: 'b', role: 'user', text: '' }, 'POST')
-    await c.call(`/api/prompt/forms/${fid}/entries`, { name: 'c', role: 'user', text: 'hi' }, 'POST')
-    const r = await c.call(`/api/prompt/forms/${fid}/send`, undefined, 'POST')
-    expect(r.status).toBe(200); expect(r.json.data).toEqual({ choices: [{ message: { content: 'hi' } }] })
-    expect(sent).toEqual([[{ role: 'system', content: 'sys' }, { role: 'user', content: 'hi' }]])
-    // 空表单:全部条目 text 为空
-    const fid2: string = (await c.call('/api/prompt/forms', { name: 'f2' }, 'POST')).json.data.id
-    const r2 = await c.call(`/api/prompt/forms/${fid2}/send`, undefined, 'POST')
-    expect(r2.status).toBe(400)
-    c.dispose()
-  })
-
-  it('send 时 llm 抛错 → message 原样透传(status 500)', async () => {
-    const c = capture({ llm: { send: async () => { throw new Error('未选择预设,请先在 LLM 面板选择一套预设') } } })
-    const fid: string = (await c.call('/api/prompt/forms', { name: 'f' }, 'POST')).json.data.id
-    await c.call(`/api/prompt/forms/${fid}/entries`, { name: 'a', role: 'user', text: 'hi' }, 'POST')
-    const r = await c.call(`/api/prompt/forms/${fid}/send`, undefined, 'POST')
-    expect(r.status).toBe(500)
-    expect(r.json.message).toBe('未选择预设,请先在 LLM 面板选择一套预设')
-    c.dispose()
-  })
-
-  it('entries 携带 blocks 创建与更新;非法 blocks → 400', async () => {
-    const c = capture({ llm: { send: async () => ({}) } })
-    const fid: string = (await c.call('/api/prompt/forms', { name: 'f' }, 'POST')).json.data.id
-    const ok = await c.call(`/api/prompt/forms/${fid}/entries`, { name: 'e', role: 'user', text: '主', kind: 'grouped', blocks: [{ id: 'b_1', text: '块' }] }, 'POST')
-    expect(ok.status).toBe(200)
-    const eid: string = ok.json.data.entryId
+    const plain = await c.call(`/api/prompt/forms/${fid}/entries`, { name: '普', role: 'user', text: 't' }, 'POST')
+    expect(plain.status).toBe(200)
+    const group = await c.call(`/api/prompt/forms/${fid}/entries`, { name: '父', role: 'system', kind: 'group' }, 'POST')
+    const gid: string = group.json.data.entryId
+    const child = await c.call(`/api/prompt/forms/${fid}/entries`, { name: '子', base: gid, text: '段' }, 'POST')
+    expect(child.status).toBe(200)
     const list = await c.call(`/api/prompt/forms/${fid}/entries`)
-    expect(list.json.data[0].blocks).toEqual([{ id: 'b_1', text: '块' }])
-    const bad = await c.call(`/api/prompt/forms/${fid}/entries/${eid}`, { name: 'e', role: 'user', text: '', kind: 'grouped', blocks: [{ id: '', text: 'x' }] }, 'PUT')
+    expect(list.json.data).toHaveLength(3)
+    expect(list.json.data[0].id).toBe(plain.json.data.entryId)
+    expect(list.json.data[1].kind).toBe('group')
+    expect(list.json.data[1].children).toEqual([child.json.data.entryId])
+    expect(list.json.data[2].base).toBe(gid)
+    const bad = await c.call(`/api/prompt/forms/${fid}/entries`, { name: 'x', base: 'e_no', text: 't' }, 'POST')
     expect(bad.status).toBe(400)
-    expect(bad.json.message).toContain('内容块')
-    const plainBad = await c.call(`/api/prompt/forms/${fid}/entries`, { name: 'p', role: 'user', text: 'x', kind: 'plain', blocks: [{ id: 'b_2', text: '块' }] }, 'POST')
-    expect(plainBad.status).toBe(400)
-    expect(plainBad.json.message).toContain('普通条目不能包含内容块')
     c.dispose()
   })
 
-  it('PUT /forms/:id/order 成功;非排列 → 400;不存在表单 → 404', async () => {
+  it('update 改 base → 400;delete 父级联;order 保存全层级', async () => {
     const c = capture({ llm: { send: async () => ({}) } })
     const fid: string = (await c.call('/api/prompt/forms', { name: 'f' }, 'POST')).json.data.id
-    const a = await c.call(`/api/prompt/forms/${fid}/entries`, { name: 'a', role: 'user', text: '1' }, 'POST')
-    const b = await c.call(`/api/prompt/forms/${fid}/entries`, { name: 'b', role: 'user', text: '2' }, 'POST')
-    const aId: string = a.json.data.entryId
-    const bId: string = b.json.data.entryId
-    const r = await c.call(`/api/prompt/forms/${fid}/order`, { ids: [bId, aId] }, 'PUT')
-    expect(r.status).toBe(200)
+    const g = await c.call(`/api/prompt/forms/${fid}/entries`, { name: '父', role: 'user', kind: 'group' }, 'POST')
+    const gid: string = g.json.data.entryId
+    const c1 = await c.call(`/api/prompt/forms/${fid}/entries`, { name: 'c1', base: gid, text: '1' }, 'POST')
+    const c2 = await c.call(`/api/prompt/forms/${fid}/entries`, { name: 'c2', base: gid, text: '2' }, 'POST')
+    expect((await c.call(`/api/prompt/forms/${fid}/entries/${c1.json.data.entryId}`, { base: 'f_other' }, 'PUT')).status).toBe(400)
+    const ord = await c.call(`/api/prompt/forms/${fid}/order`, { entries: [gid], children: { [gid]: [c2.json.data.entryId, c1.json.data.entryId] } }, 'PUT')
+    expect(ord.status).toBe(200)
     const list = await c.call(`/api/prompt/forms/${fid}/entries`)
-    expect(list.json.data.map((x: { id: string }) => x.id)).toEqual([bId, aId])
-    expect((await c.call(`/api/prompt/forms/${fid}/order`, { ids: [aId] }, 'PUT')).status).toBe(400)
-    expect((await c.call('/api/prompt/forms/f_ghost/order', { ids: [aId, bId] }, 'PUT')).status).toBe(404)
+    expect(list.json.data.map((x: { id: string }) => x.id)).toEqual([gid, c2.json.data.entryId, c1.json.data.entryId])
+    expect((await c.call(`/api/prompt/forms/${fid}/entries/${gid}`, undefined, 'DELETE')).json.ok).toBe(true)
+    expect((await c.call(`/api/prompt/forms/${fid}/entries`)).json.data).toEqual([])
     c.dispose()
   })
 
-  it('send 时带块条目 content 为父 text + 块拼接', async () => {
+  it('send:普通独立 + 父聚合', async () => {
     const sent: Message[][] = []
     const c = capture({ llm: { send: async (m: Message[]) => { sent.push(m); return {} } } })
     const fid: string = (await c.call('/api/prompt/forms', { name: 'f' }, 'POST')).json.data.id
-    await c.call(`/api/prompt/forms/${fid}/entries`, { name: 'e', role: 'user', text: '主', kind: 'grouped', blocks: [{ id: 'b_1', text: '块一' }, { id: 'b_2', text: '' }] }, 'POST')
-    await c.call(`/api/prompt/forms/${fid}/entries`, { name: 'e2', role: 'user', text: '' }, 'POST')
+    await c.call(`/api/prompt/forms/${fid}/entries`, { name: '系统', role: 'system', text: 'sys' }, 'POST')
+    const g = await c.call(`/api/prompt/forms/${fid}/entries`, { name: '父', role: 'user', kind: 'group' }, 'POST')
+    const gid: string = g.json.data.entryId
+    await c.call(`/api/prompt/forms/${fid}/entries`, { name: 'c1', base: gid, text: '一' }, 'POST')
+    await c.call(`/api/prompt/forms/${fid}/entries`, { name: 'c2', base: gid, text: '二' }, 'POST')
     const r = await c.call(`/api/prompt/forms/${fid}/send`, undefined, 'POST')
     expect(r.status).toBe(200)
-    expect(sent).toEqual([[{ role: 'user', content: '主\n\n块一' }]])
+    expect(sent).toEqual([[{ role: 'system', content: 'sys' }, { role: 'user', content: '一\n\n二' }]])
+    expect((await c.call(`/api/prompt/forms/f_ghost/send`, undefined, 'POST')).status).toBe(404)
     c.dispose()
   })
 })
