@@ -184,7 +184,7 @@ export function createPanel(toast: ToastFn): HTMLElement {
       const { entryId } = await api.createEntry(cur.id, { name: '新条目', role: 'user', text: '' })
       await renderAll() // 行列表随即出现该默认条目(demo 同款:先落库再打开编辑)
       openEntryEditor({
-        entry: { id: entryId, name: '新条目', role: 'user', text: '' },
+        entry: { id: entryId, name: '新条目', role: 'user', text: '', blocks: [] },
         onSave: async (input) => {
           if (!input.name) { toast('条目名称不能为空'); throw new Error('条目名称不能为空') }
           try {

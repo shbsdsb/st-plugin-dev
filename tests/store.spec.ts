@@ -93,3 +93,50 @@ describe('prompt store', () => {
     await expect(store.getMessages(id)).rejects.toBeInstanceOf(NotFoundError)
   })
 })
+
+describe('prompt store v2 blocks', () => {
+  it('createEntry 携带 blocks 保存,listEntries 按序读回;缺省为普通条目', async () => {
+    const { id } = await store.createForm('f')
+    const b1 = { id: 'b_1', text: '块一' }
+    const b2 = { id: 'b_2', text: '块二' }
+    const { entryId } = await store.createEntry(id, { name: 'e', role: 'user', text: '主文本', blocks: [b1, b2] })
+    const rows = await store.listEntries(id)
+    expect(rows[0].blocks).toEqual([b1, b2])
+    const { entryId: e2 } = await store.createEntry(id, { name: 'e2', role: 'user', text: '' })
+    const rows2 = await store.listEntries(id)
+    expect(rows2.find((r) => r.id === e2)?.blocks).toEqual([])
+    expect(entryId.length).toBeGreaterThan(0)
+  })
+
+  it('旧条目文件(无 blocks 字段)读取为 []', async () => {
+    const { id } = await store.createForm('f')
+    const { entryId } = await store.createEntry(id, { name: 'e', role: 'user', text: '旧' })
+    await mem.write(`data/prompt/${id}/e-${entryId}.json`, { id: entryId, name: '旧', role: 'user', text: '旧' }) // 覆写为 v1 形态(无 blocks)
+    const rows = await store.listEntries(id)
+    expect(rows).toHaveLength(1)
+    expect(rows[0].blocks).toEqual([])
+    expect(await store.getMessages(id)).toEqual([{ role: 'user', content: '旧' }])
+  })
+
+  it('updateEntry 全量替换 blocks', async () => {
+    const { id } = await store.createForm('f')
+    const { entryId } = await store.createEntry(id, { name: 'e', role: 'user', text: 'a' })
+    await store.updateEntry(id, entryId, { name: 'e', role: 'user', text: 'a', blocks: [{ id: 'b_x', text: '新块' }] })
+    const rows = await store.listEntries(id)
+    expect(rows[0].blocks).toEqual([{ id: 'b_x', text: '新块' }])
+  })
+
+  it('blocks 校验:空 id/重复 id/超 50 块/单块超长 → 中文错误', async () => {
+    const { id } = await store.createForm('f')
+    await expect(store.createEntry(id, { name: 'e', role: 'user', text: '', blocks: [{ id: '', text: 'x' }] }))
+      .rejects.toThrow('内容块')
+    await expect(store.createEntry(id, { name: 'e', role: 'user', text: '', blocks: [{ id: 'b_1', text: 'x' }, { id: 'b_1', text: 'y' }] }))
+      .rejects.toThrow('内容块')
+    const many: { id: string; text: string }[] = Array.from({ length: 51 }, (_, i) => ({ id: `b_${i}`, text: 'x' }))
+    await expect(store.createEntry(id, { name: 'e', role: 'user', text: '', blocks: many })).rejects.toThrow('内容块')
+    await expect(store.createEntry(id, { name: 'e', role: 'user', text: '', blocks: [{ id: 'b_1', text: 'x'.repeat(20001) }] }))
+      .rejects.toThrow('内容块')
+    await expect(store.createEntry(id, { name: 'e', role: 'user', text: '', blocks: [{ text: '缺 id' } as never] }))
+      .rejects.toThrow('内容块')
+  })
+})
