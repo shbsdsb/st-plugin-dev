@@ -9,7 +9,7 @@ import { openEntryEditor, openGroupCreator, openChildCreator, openChildEditor } 
 import { confirmDialog } from './confirm.ts'
 import { openResult } from './result-modal.ts'
 import { createLayer, headOf, footOf } from './layers.ts'
-import { attachDrag } from './drag.ts'
+import { makeSortable, type SortableList } from './sortable.ts'
 
 type ToastFn = (msg: string) => void
 
@@ -56,6 +56,28 @@ export function createPanel(toast: ToastFn): HTMLElement {
     return cur.id
   }
 
+  // ===== 排序器(plugin-setting 式绝对定位) =====
+  const childSorts: SortableList[] = []
+  function destroyChildSorts(): void {
+    for (const s of childSorts) s.destroy()
+    childSorts.length = 0
+  }
+  const topSort = makeSortable({
+    container: listBox,
+    rowSelector: '.prp.entry-wrap',
+    handleSelector: '.prp.entry-head .prp.drag-handle',
+    gap: 8,
+    onDrop: (items) => {
+      const ids = items.map((it) => it.dataset.entryId ?? '').filter((x) => x !== '')
+      const cur = state.topOrder
+      if (ids.length !== cur.length) return
+      if (ids.join('|') === cur.join('|')) return
+      state = { ...state, topOrder: ids, dirtyOrder: true }
+      updateSendAndSave()
+      setStatus('顺序已调整,点击「保存顺序」提交', 'idle')
+    },
+  })
+
   async function refreshAll(): Promise<void> {
     const cur = current()
     if (!cur) { renderEmpty('暂无表单,点击「新建表单」开始'); updateSendAndSave(); return }
@@ -82,22 +104,50 @@ export function createPanel(toast: ToastFn): HTMLElement {
   }
 
   function renderEmpty(msg: string): void {
+    destroyChildSorts()
     listBox.innerHTML = ''
     listBox.appendChild(el('div', 'prp empty-state', msg))
+    topSort.layout()
   }
 
   function renderList(): void {
+    destroyChildSorts()
     const { top, childrenByParent } = toTree(rows)
+    const byId = new Map(top.map((e) => [e.id, e] as const))
     listBox.innerHTML = ''
-    if (top.length === 0) {
+    // 渲染序:内存序(state.topOrder 若与当前顶层 id 集合一致)优先,否则服务端序
+    let orderedIds = top.map((e) => e.id)
+    const mem = state.topOrder
+    if (mem.length === byId.size && byId.size > 0
+      && new Set(mem).size === mem.length && mem.every((id) => byId.has(id))) {
+      orderedIds = mem
+    }
+    if (orderedIds.length === 0) {
       listBox.appendChild(el('div', 'prp empty-state', '当前表单没有条目,点击「新建条目」添加'))
+      topSort.layout()
       return
     }
-    for (const e of top) {
+    for (const id of orderedIds) {
+      const e = byId.get(id)
+      if (!e) continue
       const wrap = renderTopRow(e, childrenByParent)
       listBox.appendChild(wrap)
-      bindTopDrag(wrap, e)
     }
+    // 子列表先布局(绝对定位需显式高度,参与父行 offsetHeight),再布局顶层
+    for (const s of childSorts) s.layout()
+    topSort.layout()
+  }
+
+  /** 父条目子序:内存序(state.childOrder[g.id] 与子集合一致)优先,否则服务端 children 序 */
+  function orderedChildren(g: GroupEntry, childrenByParent: Record<string, ChildEntry[]>): ChildEntry[] {
+    const all = childrenByParent[g.id] ?? []
+    const mem = state.childOrder[g.id]
+    if (mem && mem.length === all.length && new Set(mem).size === mem.length
+      && mem.every((id) => all.some((c) => c.id === id))) {
+      const map = new Map(all.map((c) => [c.id, c] as const))
+      return mem.map((id) => map.get(id)!).filter((c): c is ChildEntry => !!c)
+    }
+    return all
   }
 
   function renderTopRow(e: Entry, childrenByParent: Record<string, ChildEntry[]>): HTMLElement {
@@ -155,33 +205,48 @@ export function createPanel(toast: ToastFn): HTMLElement {
     head.append(handle, name, role, segPid, caretBtn, spacer, editBtn, delBtn)
     wrap.appendChild(head)
     if (group && expanded) {
-      const children = childrenByParent[e.id] ?? []
-      wrap.appendChild(renderDetail(e as GroupEntry, children))
+      wrap.appendChild(renderDetail(e as GroupEntry, childrenByParent))
     }
     return wrap
   }
 
-  function renderDetail(g: GroupEntry, children: ChildEntry[]): HTMLElement {
+  function renderDetail(g: GroupEntry, childrenByParent: Record<string, ChildEntry[]>): HTMLElement {
+    const children = orderedChildren(g, childrenByParent)
     const detail = el('div', 'prp entry-detail')
     const label = el('label', 'prp detail-label')
     label.textContent = `子条目(${children.length})—— role 取父条目 ${g.role},text 按序拼入父内容`
     detail.append(label)
     const childList = el('div', 'prp block-list')
+    detail.appendChild(childList)
     if (children.length === 0) {
       childList.appendChild(el('div', 'prp block-empty', '暂无子条目,点击下方「新建子条目」'))
     } else {
       for (const c of children) {
         const rowEl = renderChildRow(g, c)
         childList.appendChild(rowEl)
-        bindChildDrag(rowEl, g)
       }
+      const childSort = makeSortable({
+        container: childList,
+        rowSelector: '.prp.block-row',
+        handleSelector: '.prp.block-row .prp.drag-handle',
+        gap: 4,
+        onDrop: (items) => {
+          const ids = items.map((it) => it.dataset.blockId ?? '').filter((x) => x !== '')
+          const cur = state.childOrder[g.id] ?? []
+          if (ids.length !== cur.length) return
+          if (ids.join('|') === cur.join('|')) return
+          state = { ...state, childOrder: { ...state.childOrder, [g.id]: ids }, dirtyOrder: true }
+          updateSendAndSave()
+          setStatus('顺序已调整,点击「保存顺序」提交', 'idle')
+        },
+      })
+      childSorts.push(childSort)
     }
-    detail.append(childList)
     detail.appendChild(button('prp dashed-btn', '新建子条目', () => void doCreateChild(g)))
     return detail
   }
 
-  function renderChildRow(g: GroupEntry, c: ChildEntry): HTMLElement {
+  function renderChildRow(_g: GroupEntry, c: ChildEntry): HTMLElement {
     const rowEl = el('div', 'prp block-row')
     rowEl.dataset.blockId = c.id
     const handle = el('span', 'prp drag-handle', '⋮⋮')
@@ -208,36 +273,7 @@ export function createPanel(toast: ToastFn): HTMLElement {
       })
     })
     rowEl.append(handle, name, preview, editBtn, delBtn)
-    void g
     return rowEl
-  }
-
-  // ---------- 顶层拖拽(纯前端内存序) ----------
-  function bindTopDrag(w: HTMLElement, _e: Entry): void {
-    const h = w.querySelector<HTMLElement>('.entry-head .drag-handle')
-    if (!h) return
-    attachDrag({ handle: h, item: w, container: listBox, onDrop: (items) => {
-      const ids = items.map((it) => it.dataset.entryId ?? '').filter((x) => x !== '')
-      if (ids.length !== state.topOrder.length) return
-      if (ids.join('|') === state.topOrder.join('|')) return
-      state = { ...state, topOrder: ids, dirtyOrder: true }
-      updateSendAndSave()
-    } })
-  }
-
-  // ---------- 子条目拖拽(纯前端内存序) ----------
-  function bindChildDrag(rowEl: HTMLElement, g: GroupEntry): void {
-    const h = rowEl.querySelector<HTMLElement>('.drag-handle')
-    if (!h || !rowEl.parentElement) return
-    const container = rowEl.parentElement
-    attachDrag({ handle: h, item: rowEl, container, onDrop: (items) => {
-      const ids = items.map((it) => it.dataset.blockId ?? '').filter((x) => x !== '')
-      const cur = state.childOrder[g.id] ?? []
-      if (ids.length !== cur.length) return
-      if (ids.join('|') === cur.join('|')) return
-      state = { ...state, childOrder: { ...state.childOrder, [g.id]: ids }, dirtyOrder: true }
-      updateSendAndSave()
-    } })
   }
 
   async function doSaveOrder(): Promise<void> {

@@ -19,7 +19,6 @@ const CSS = `
 .prp .fg>label{font-size:13px;font-weight:500;color:#18181b}
 .prp .fg input,.prp .fg select,.prp .fg textarea{width:100%;padding:10px 14px;font-size:13px;font-family:inherit;border:1px solid #d4d4d8;border-radius:8px;background:#fff;color:#18181b;outline:none;box-shadow:0 1px 2px rgba(0,0,0,.04)}
 .prp .fg textarea{resize:vertical;min-height:120px;line-height:1.6}
-.prp .entry-list{display:flex;flex-direction:column;gap:8px}
 .prp .entry-item{display:flex;align-items:center;gap:8px;border:1px solid #e4e4e7;border-radius:8px;padding:6px 10px;background:#fff}
 .prp .entry-item:hover{border-color:#d4d4d8}
 .prp .entry-name{font-size:13.5px;font-weight:500;color:#18181b;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -51,18 +50,25 @@ const CSS = `
 .prp .status-dot.error{background:#d9534f}
 .prp .status-text{font-size:12px;color:#52525b}
 .prp .sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
-.prp .entry-wrap{display:block}
+.prp .entry-list{display:block;position:relative;min-height:0}
+.prp .entry-wrap{position:absolute;left:0;right:0;top:0;transition:top .3s cubic-bezier(.22,.61,.36,1),box-shadow .2s ease,border-color .2s ease;will-change:top}
+.prp .entry-wrap.prp-dragging{z-index:100;box-shadow:0 12px 40px rgba(31,38,135,.25);border-color:rgba(124,109,246,.6);cursor:grabbing;transition:box-shadow .2s ease,border-color .2s ease}
 .prp .entry-head{display:flex;align-items:center;gap:8px;border:1px solid #e4e4e7;border-radius:8px;padding:6px 10px;background:#fff}
 .prp .entry-head:hover{border-color:#d4d4d8}
 .prp .drag-handle{cursor:grab;color:#c9c9cf;font-size:12px;user-select:none;flex-shrink:0;padding:0 2px}
+.prp .drag-handle:hover{color:#7c6df6}
 .prp .drag-handle:active{cursor:grabbing}
+.prp .entry-wrap.prp-dragging .drag-handle,.prp .block-row.prp-dragging .drag-handle{color:#7c6df6}
 .prp .pid-empty{flex-shrink:0}
 .prp .entry-detail{margin:2px 0 8px 22px;padding:8px 10px;background:#fafafa;border:1px solid #ececec;border-radius:8px}
 .prp .detail-label{display:block;font-size:12px;color:#8a8a92;margin:4px 0}
 .prp .detail-text{font-size:12px;color:#6b6b73;white-space:pre-wrap;word-break:break-all;max-height:96px;overflow:auto;background:#fff;border:1px solid #efefef;border-radius:6px;padding:6px 8px;margin-bottom:6px}
-.prp .block-list{display:block}
-.prp .block-row{display:flex;align-items:flex-start;gap:6px;margin:4px 0;background:#fff;border:1px solid #f0f0f0;border-radius:6px;padding:4px}
+.prp .block-list{display:block;position:relative;min-height:0}
+.prp .block-row{position:absolute;left:0;right:0;top:0;display:flex;align-items:flex-start;gap:6px;background:#fff;border:1px solid #f0f0f0;border-radius:6px;padding:4px;transition:top .3s cubic-bezier(.22,.61,.36,1),box-shadow .2s ease,border-color .2s ease;will-change:top}
 .prp .block-row:hover{border-color:#e0e0e0}
+.prp .block-row.prp-dragging{z-index:100;box-shadow:0 12px 40px rgba(31,38,135,.25);border-color:rgba(124,109,246,.6);cursor:grabbing;transition:box-shadow .2s ease,border-color .2s ease}
+.prp .prp-drop-indicator{position:absolute;left:0;right:0;height:3px;border-radius:3px;background:#7c6df6;opacity:0;transition:opacity .15s ease;pointer-events:none;box-shadow:0 0 10px rgba(124,109,246,.5);z-index:101}
+.prp .prp-drop-indicator.visible{opacity:1}
 .prp .block-textarea{flex:1;min-height:44px;resize:vertical;font-family:inherit;font-size:12px;line-height:1.6;border:1px solid #e4e4e9;border-radius:6px;padding:5px 7px;background:#fff}
 .prp .block-textarea:focus{outline:none;border-color:#b9b9c2}
 .prp .dashed-btn{border:1px dashed #c9c9cf;background:none;color:#6b6b73;border-radius:6px;padding:4px 10px;cursor:pointer;font-size:12px;margin-top:6px}
@@ -71,8 +77,6 @@ const CSS = `
 .prp .wizard-tip{font-size:12px;color:#8a8a92;margin-bottom:8px}
 .prp .wizard-opt{display:block;width:100%;text-align:left;border:1px solid #e4e4e9;background:#fff;border-radius:8px;padding:10px 12px;cursor:pointer;font-size:13px;color:#333;margin-bottom:6px}
 .prp .wizard-opt:hover{border-color:#b9b9c2;background:#fafafa}
-.prp .entry-list.prp-dragging .entry-head,.prp .block-list.prp-dragging .block-row{transition:transform .12s ease}
-.prp .drag-ghost{opacity:.85;box-shadow:0 6px 18px rgba(0,0,0,.12);z-index:20;position:relative}
 .prp .save-order-btn{margin-left:0;padding:9px 18px;font-size:13px;font-weight:600;border:1px dashed #71717a;border-radius:8px;background:#fff;color:#52525b;cursor:pointer}
 .prp .save-order-btn:hover:not(:disabled){background:#f4f4f5;border-style:solid}
 .prp .save-order-btn:disabled{opacity:.45;cursor:not-allowed}
