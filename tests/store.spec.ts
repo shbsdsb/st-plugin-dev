@@ -99,7 +99,7 @@ describe('prompt store v2 blocks', () => {
     const { id } = await store.createForm('f')
     const b1 = { id: 'b_1', text: '块一' }
     const b2 = { id: 'b_2', text: '块二' }
-    const { entryId } = await store.createEntry(id, { name: 'e', role: 'user', text: '主文本', blocks: [b1, b2] })
+    const { entryId } = await store.createEntry(id, { name: 'e', role: 'user', text: '主文本', kind: 'grouped', blocks: [b1, b2] })
     const rows = await store.listEntries(id)
     expect(rows[0].blocks).toEqual([b1, b2])
     const { entryId: e2 } = await store.createEntry(id, { name: 'e2', role: 'user', text: '' })
@@ -120,23 +120,23 @@ describe('prompt store v2 blocks', () => {
 
   it('updateEntry 全量替换 blocks', async () => {
     const { id } = await store.createForm('f')
-    const { entryId } = await store.createEntry(id, { name: 'e', role: 'user', text: 'a' })
-    await store.updateEntry(id, entryId, { name: 'e', role: 'user', text: 'a', blocks: [{ id: 'b_x', text: '新块' }] })
+    const { entryId } = await store.createEntry(id, { name: 'e', role: 'user', text: 'a', kind: 'grouped' })
+    await store.updateEntry(id, entryId, { name: 'e', role: 'user', text: 'a', kind: 'grouped', blocks: [{ id: 'b_x', text: '新块' }] })
     const rows = await store.listEntries(id)
     expect(rows[0].blocks).toEqual([{ id: 'b_x', text: '新块' }])
   })
 
   it('blocks 校验:空 id/重复 id/超 50 块/单块超长 → 中文错误', async () => {
     const { id } = await store.createForm('f')
-    await expect(store.createEntry(id, { name: 'e', role: 'user', text: '', blocks: [{ id: '', text: 'x' }] }))
+    await expect(store.createEntry(id, { name: 'e', role: 'user', text: '', kind: 'grouped', blocks: [{ id: '', text: 'x' }] }))
       .rejects.toThrow('内容块')
-    await expect(store.createEntry(id, { name: 'e', role: 'user', text: '', blocks: [{ id: 'b_1', text: 'x' }, { id: 'b_1', text: 'y' }] }))
+    await expect(store.createEntry(id, { name: 'e', role: 'user', text: '', kind: 'grouped', blocks: [{ id: 'b_1', text: 'x' }, { id: 'b_1', text: 'y' }] }))
       .rejects.toThrow('内容块')
     const many: { id: string; text: string }[] = Array.from({ length: 51 }, (_, i) => ({ id: `b_${i}`, text: 'x' }))
-    await expect(store.createEntry(id, { name: 'e', role: 'user', text: '', blocks: many })).rejects.toThrow('内容块')
-    await expect(store.createEntry(id, { name: 'e', role: 'user', text: '', blocks: [{ id: 'b_1', text: 'x'.repeat(20001) }] }))
+    await expect(store.createEntry(id, { name: 'e', role: 'user', text: '', kind: 'grouped', blocks: many })).rejects.toThrow('内容块')
+    await expect(store.createEntry(id, { name: 'e', role: 'user', text: '', kind: 'grouped', blocks: [{ id: 'b_1', text: 'x'.repeat(20001) }] }))
       .rejects.toThrow('内容块')
-    await expect(store.createEntry(id, { name: 'e', role: 'user', text: '', blocks: [{ text: '缺 id' } as never] }))
+    await expect(store.createEntry(id, { name: 'e', role: 'user', text: '', kind: 'grouped', blocks: [{ text: '缺 id' } as never] }))
       .rejects.toThrow('内容块')
   })
 
@@ -158,5 +158,59 @@ describe('prompt store v2 blocks', () => {
     await expect(store.reorderEntries(id, [a.entryId, a.entryId])).rejects.toThrow('顺序')
     await expect(store.reorderEntries(id, [a.entryId, 'e_ghost'])).rejects.toThrow('顺序')
     await expect(store.reorderEntries('f_ghost', [a.entryId, b.entryId])).rejects.toBeInstanceOf(NotFoundError)
+  })
+})
+
+describe('prompt store v3 kind(普通/带块类型区分)', () => {
+  it('createEntry kind=grouped 空 blocks 保存,读回 kind=grouped blocks=[]', async () => {
+    const { id } = await store.createForm('f')
+    const { entryId } = await store.createEntry(id, { name: '带块', role: 'user', text: '', kind: 'grouped', blocks: [] })
+    const rows = await store.listEntries(id)
+    expect(rows[0].kind).toBe('grouped')
+    expect(rows[0].blocks).toEqual([])
+    expect(rows[0].id).toBe(entryId)
+  })
+
+  it('createEntry 未传 kind 缺省 plain;kind 非法 → 报错', async () => {
+    const { id } = await store.createForm('f')
+    const { entryId } = await store.createEntry(id, { name: '普通', role: 'user', text: 'x' })
+    const rows = await store.listEntries(id)
+    expect(rows[0].kind).toBe('plain')
+    await expect(store.createEntry(id, { name: 'x', role: 'user', text: '', kind: 'other' as never })).rejects.toThrow('kind 非法')
+  })
+
+  it('kind=plain 提交非空 blocks → 拒绝;kind=grouped 允许', async () => {
+    const { id } = await store.createForm('f')
+    await expect(store.createEntry(id, { name: 'e', role: 'user', text: 'x', kind: 'plain', blocks: [{ id: 'b_1', text: '块' }] }))
+      .rejects.toThrow('普通条目不能包含内容块')
+    const { entryId } = await store.createEntry(id, { name: 'g', role: 'user', text: '主', kind: 'grouped', blocks: [{ id: 'b_1', text: '块' }] })
+    // updateEntry 把 grouped 改为 plain 且带块 → 拒绝;清空块后可转 plain
+    await expect(store.updateEntry(id, entryId, { name: 'g', role: 'user', text: '主', kind: 'plain', blocks: [{ id: 'b_1', text: '块' }] }))
+      .rejects.toThrow('普通条目不能包含内容块')
+    await store.updateEntry(id, entryId, { name: 'g', role: 'user', text: '主', kind: 'plain', blocks: [] })
+    const rows = await store.listEntries(id)
+    expect(rows[0].kind).toBe('plain')
+  })
+
+  it('updateEntry 可把普通条目升级为 grouped(仍无块)并可再保存块', async () => {
+    const { id } = await store.createForm('f')
+    const { entryId } = await store.createEntry(id, { name: 'e', role: 'user', text: 'x' })
+    await store.updateEntry(id, entryId, { name: 'e', role: 'user', text: 'x', kind: 'grouped', blocks: [] })
+    await store.updateEntry(id, entryId, { name: 'e', role: 'user', text: 'x', kind: 'grouped', blocks: [{ id: 'b_1', text: '块' }] })
+    const rows = await store.listEntries(id)
+    expect(rows[0].kind).toBe('grouped')
+    expect(rows[0].blocks).toEqual([{ id: 'b_1', text: '块' }])
+  })
+
+  it('旧 v1 文件(无 kind/blocks)读取为 plain;带 blocks 无 kind 的文件推断为 grouped', async () => {
+    const { id } = await store.createForm('f')
+    const a = await store.createEntry(id, { name: 'a', role: 'user', text: '1' })
+    const b = await store.createEntry(id, { name: 'b', role: 'user', text: '2' })
+    await mem.write(`data/prompt/${id}/e-${a.entryId}.json`, { id: a.entryId, name: 'a', role: 'user', text: '1' }) // v1:无 kind/blocks
+    await mem.write(`data/prompt/${id}/e-${b.entryId}.json`, { id: b.entryId, name: 'b', role: 'user', text: '2', blocks: [{ id: 'b_1', text: '旧块' }] }) // v2 早期:有 blocks 无 kind
+    const rows = await store.listEntries(id)
+    expect(rows.find((r) => r.id === a.entryId)?.kind).toBe('plain')
+    expect(rows.find((r) => r.id === b.entryId)?.kind).toBe('grouped')
+    expect(rows.find((r) => r.id === b.entryId)?.blocks).toEqual([{ id: 'b_1', text: '旧块' }])
   })
 })

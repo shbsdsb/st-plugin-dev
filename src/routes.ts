@@ -30,7 +30,7 @@ function errStatus(e: unknown): number {
   if (e instanceof NotFoundError) return 404
   if (e instanceof SyntaxError) return 400 // JSON.parse 失败
   const msg = (e as Error)?.message ?? ''
-  if (/名称|role 非法|内容块|顺序/.test(msg)) return 400
+  if (/名称|role 非法|kind 非法|内容块|顺序|普通条目/.test(msg)) return 400
   return 500
 }
 function decode(seg: string): string {
@@ -111,9 +111,9 @@ export function registerRoutes(register: Register, dep: { store: PromptStore; ll
           const formId = seg[0]
           if (req.method === 'GET') return ok(res, await store.listEntries(formId))
           if (req.method === 'POST') {
-            const b = await parseBody<{ name?: unknown; role?: unknown; text?: unknown; blocks?: unknown }>(req)
+            const b = await parseBody<{ name?: unknown; role?: unknown; text?: unknown; kind?: unknown; blocks?: unknown }>(req)
             const { entryId } = await store.createEntry(formId, {
-              name: String(b.name ?? ''), role: b.role as never, text: String(b.text ?? ''), blocks: b.blocks as never,
+              name: String(b.name ?? ''), role: b.role as never, text: String(b.text ?? ''), kind: b.kind as never, blocks: b.blocks as never,
             })
             return ok(res, { entryId })
           }
@@ -124,9 +124,9 @@ export function registerRoutes(register: Register, dep: { store: PromptStore; ll
         if (seg.length === 3 && seg[1] === 'entries') {
           const [formId, , entryId] = seg
           if (req.method === 'PUT') {
-            const b = await parseBody<{ name?: unknown; role?: unknown; text?: unknown; blocks?: unknown }>(req)
+            const b = await parseBody<{ name?: unknown; role?: unknown; text?: unknown; kind?: unknown; blocks?: unknown }>(req)
             await store.updateEntry(formId, entryId, {
-              name: String(b.name ?? ''), role: b.role as never, text: String(b.text ?? ''), blocks: b.blocks as never,
+              name: String(b.name ?? ''), role: b.role as never, text: String(b.text ?? ''), kind: b.kind as never, blocks: b.blocks as never,
             })
             return ok(res, { entryId })
           }

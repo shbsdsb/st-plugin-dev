@@ -1,5 +1,5 @@
 import { buildMessages } from './messages.ts'
-import type { Block, Entry, EntryRole, FormRow, Message } from './types.ts'
+import type { Block, Entry, EntryKind, EntryRole, FormRow, Message } from './types.ts'
 
 export class NotFoundError extends Error {
   constructor(message: string) { super(message); this.name = 'NotFoundError' }
@@ -14,7 +14,7 @@ export interface PersistJsonLike {
 
 export interface BlockInput { id: string; text: string }
 
-export interface EntryInput { name: string; role: EntryRole; text: string; blocks?: BlockInput[] }
+export interface EntryInput { name: string; role: EntryRole; text: string; kind?: EntryKind; blocks?: BlockInput[] }
 
 export interface PromptStore {
   listForms(): Promise<FormRow[]>
@@ -31,6 +31,7 @@ export interface PromptStore {
 
 const ROOT = 'data/prompt'
 const VALID_ROLES: EntryRole[] = ['system', 'user', 'assistant']
+const VALID_KINDS: EntryKind[] = ['plain', 'grouped']
 const MAX_BLOCKS = 50
 const MAX_BLOCK_TEXT = 20000
 
@@ -52,13 +53,21 @@ function cleanRole(v: unknown): EntryRole {
   if (!(VALID_ROLES as string[]).includes(r)) throw new Error('role 非法,仅支持 system/user/assistant')
   return r as EntryRole
 }
+function cleanKind(v: unknown): EntryKind {
+  const k = v === undefined || v === null ? 'plain' : String(v)
+  if (!(VALID_KINDS as string[]).includes(k)) throw new Error('kind 非法,仅支持 plain/grouped')
+  return k as EntryKind
+}
 function cleanText(v: unknown): string {
   return typeof v === 'string' ? v : ''
 }
-interface CleanEntryInput extends EntryInput { blocks: BlockInput[] }
+interface CleanEntryInput extends EntryInput { kind: EntryKind; blocks: BlockInput[] }
 
 function cleanEntryInput(b: Record<string, unknown>): CleanEntryInput {
-  return { name: cleanName(b.name), role: cleanRole(b.role), text: cleanText(b.text), blocks: cleanBlocks(b.blocks) }
+  const kind = cleanKind(b.kind)
+  const blocks = cleanBlocks(b.blocks)
+  if (kind === 'plain' && blocks.length > 0) throw new Error('普通条目不能包含内容块')
+  return { name: cleanName(b.name), role: cleanRole(b.role), text: cleanText(b.text), kind, blocks }
 }
 
 function cleanBlocks(v: unknown): BlockInput[] {
@@ -89,7 +98,7 @@ async function readForm(persist: PersistJsonLike, formId: string): Promise<FormF
   return { name: typeof f.name === 'string' ? f.name : '未命名', entries }
 }
 
-/** 读取归一化:损坏文件/缺 id 或 text → null;缺 blocks → [] */
+/** 读取归一化:损坏文件/缺 id 或 text → null;缺 blocks → [];kind 缺省按 blocks 推断(非空 → grouped) */
 function parseEntry(raw: unknown): Entry | null {
   if (!raw || typeof raw !== 'object') return null
   const e = raw as Partial<Entry>
@@ -98,7 +107,10 @@ function parseEntry(raw: unknown): Entry | null {
   const blocks = Array.isArray(e.blocks)
     ? e.blocks.filter((b): b is Block => !!b && typeof b === 'object' && typeof (b as { id?: unknown }).id === 'string' && typeof (b as { text?: unknown }).text === 'string')
     : []
-  return { id: e.id, name: typeof e.name === 'string' ? e.name : '未命名', role, text: e.text, blocks }
+  const kind: EntryKind = (VALID_KINDS as string[]).includes(e.kind as string)
+    ? e.kind as EntryKind
+    : (blocks.length > 0 ? 'grouped' : 'plain')
+  return { id: e.id, name: typeof e.name === 'string' ? e.name : '未命名', role, text: e.text, kind, blocks }
 }
 
 export function createStore(persist: PersistJsonLike): PromptStore {
@@ -144,7 +156,7 @@ export function createStore(persist: PersistJsonLike): PromptStore {
       const f = await readForm(persist, formId)
       const clean = cleanEntryInput(input as unknown as Record<string, unknown>)
       const entryId = genId('e')
-      const entry: Entry = { id: entryId, name: clean.name, role: clean.role, text: clean.text, blocks: clean.blocks }
+      const entry: Entry = { id: entryId, name: clean.name, role: clean.role, text: clean.text, kind: clean.kind, blocks: clean.blocks }
       await persist.write(entryFile(formId, entryId), entry)
       f.entries.push(entryId)
       await persist.write(formFile(formId), f)
@@ -156,7 +168,7 @@ export function createStore(persist: PersistJsonLike): PromptStore {
       const clean = cleanEntryInput(input as unknown as Record<string, unknown>)
       const existing = await persist.read(entryFile(formId, entryId))
       if (!existing) throw new NotFoundError('条目不存在')
-      await persist.write(entryFile(formId, entryId), { id: entryId, name: clean.name, role: clean.role, text: clean.text, blocks: clean.blocks } satisfies Entry)
+      await persist.write(entryFile(formId, entryId), { id: entryId, name: clean.name, role: clean.role, text: clean.text, kind: clean.kind, blocks: clean.blocks } satisfies Entry)
     },
     async deleteEntry(formId, entryId) {
       const f = await readForm(persist, formId)

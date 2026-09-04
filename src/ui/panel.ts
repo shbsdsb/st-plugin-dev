@@ -212,14 +212,14 @@ export function createPanel(toast: ToastFn): HTMLElement {
 
   async function createPlain(cur: FormRow): Promise<void> {
     try {
-      const { entryId } = await api.createEntry(cur.id, { name: '新条目', role: 'user', text: '', blocks: [] })
+      const { entryId } = await api.createEntry(cur.id, { name: '新条目', role: 'user', text: '', kind: 'plain', blocks: [] })
       await renderAll()
       openEntryEditor({
-        entry: { id: entryId, name: '新条目', role: 'user', text: '', blocks: [] },
+        entry: { id: entryId, name: '新条目', role: 'user', text: '', kind: 'plain', blocks: [] },
         onSave: async (input) => {
           if (!input.name) { toast('条目名称不能为空'); throw new Error('条目名称不能为空') }
           try {
-            await api.updateEntry(cur.id, entryId, { ...input, blocks: [] })
+            await api.updateEntry(cur.id, entryId, { ...input, kind: 'plain', blocks: [] })
             await renderAll()
             toast('已保存条目')
           } catch (e) { toastError(e); throw e }
@@ -230,10 +230,10 @@ export function createPanel(toast: ToastFn): HTMLElement {
 
   async function createGrouped(cur: FormRow): Promise<void> {
     try {
-      const { entryId } = await api.createEntry(cur.id, { name: '新条目', role: 'user', text: '', blocks: [] })
+      const { entryId } = await api.createEntry(cur.id, { name: '新条目', role: 'user', text: '', kind: 'grouped', blocks: [] })
       state = setExpand(state, entryId)
       await renderAll()
-      const addBtn = listBox.querySelector<HTMLButtonElement>(`.prp-entry-wrap[data-entry-id="${entryId}"] .prp.dashed-btn`)
+      const addBtn = listBox.querySelector<HTMLButtonElement>(`.entry-wrap[data-entry-id="${entryId}"] .dashed-btn`)
       addBtn?.focus() // spec §6.1:创建后焦点落「添加内容块」
       toast('已创建,点击「添加内容块」填入段落')
     } catch (e) { toastError(e) }
@@ -263,7 +263,7 @@ export function createPanel(toast: ToastFn): HTMLElement {
         for (const e of rows) wraps.push(renderEntryWrap(e, cur.id))
         for (const w of wraps) {
           listBox.appendChild(w)
-          const h = w.querySelector<HTMLElement>('.prp-entry-head .prp-drag-handle')
+          const h = w.querySelector<HTMLElement>('.entry-head .drag-handle')
           if (h) {
             attachDrag({
               handle: h,
@@ -306,11 +306,12 @@ export function createPanel(toast: ToastFn): HTMLElement {
     name.title = e.name
     const role = el('span', 'prp entry-role', e.role)
     const segs = segmentCount(e)
-    const segPid = segs > 0 ? el('span', 'prp pid', `${segs} 段`) : el('span', 'prp pid-empty')
+    const grouped = e.kind === 'grouped'
+    const segPid = grouped && segs > 0 ? el('span', 'prp pid', `${segs} 段`) : el('span', 'prp pid-empty')
     const expanded = state.expandedId === e.id
-    const caretBtn = button('prp text-btn', '', () => { if (segs > 0) void doToggleExpand(e.id) })
-    caretBtn.textContent = segs > 0 ? (expanded ? '收起' : '展开') : ''
-    if (segs === 0) caretBtn.style.visibility = 'hidden' // 普通条目无展开能力,仍占位保持对齐
+    const caretBtn = button('prp text-btn', '', () => { if (grouped) void doToggleExpand(e.id) })
+    caretBtn.textContent = grouped ? (expanded ? '收起' : '展开') : ''
+    if (!grouped) caretBtn.style.visibility = 'hidden' // 普通条目无展开能力,仍占位保持对齐
     const spacer = el('span', 'prp entry-spacer')
     const editBtn = button('prp text-btn', '编辑', () => {
       openEntryEditor({
@@ -319,7 +320,7 @@ export function createPanel(toast: ToastFn): HTMLElement {
           if (!input.name) { toast('条目名称不能为空'); throw new Error('条目名称不能为空') }
           try {
             const latest = fresh(e.id)
-            await api.updateEntry(formId, e.id, { ...input, blocks: latest?.blocks ?? [] })
+            await api.updateEntry(formId, e.id, { ...input, kind: latest?.kind ?? 'plain', blocks: latest?.blocks ?? [] })
             await renderAll()
             toast('已保存条目')
           } catch (err) { toastError(err); throw err }
@@ -344,7 +345,7 @@ export function createPanel(toast: ToastFn): HTMLElement {
     })
     head.append(handle, name, role, segPid, caretBtn, spacer, editBtn, delBtn)
     wrap.appendChild(head)
-    if (segs > 0 && expanded) wrap.appendChild(renderDetail(e, formId))
+    if (grouped && expanded) wrap.appendChild(renderDetail(e, formId))
     return wrap
   }
 
@@ -378,7 +379,7 @@ export function createPanel(toast: ToastFn): HTMLElement {
         blockList.appendChild(br)
       }
     for (const br of blockRows) {
-      const h = br.querySelector<HTMLElement>('.prp-drag-handle')
+      const h = br.querySelector<HTMLElement>('.drag-handle')
       if (h) {
         attachDrag({
           handle: h,
@@ -392,7 +393,7 @@ export function createPanel(toast: ToastFn): HTMLElement {
             const blocks = ids.map((id) => byId.get(id)).filter((x): x is Block => !!x)
             void (async () => {
               try {
-                await api.updateEntry(formId, e.id, { name: latest.name, role: latest.role, text: latest.text, blocks })
+                await api.updateEntry(formId, e.id, { name: latest.name, role: latest.role, text: latest.text, kind: latest.kind, blocks })
                 await renderAll()
                 toast('已保存内容块顺序')
               } catch (err) {
@@ -435,7 +436,7 @@ export function createPanel(toast: ToastFn): HTMLElement {
         if (idx < 0) return
         const next = latest.blocks.map((x, i) => (i === idx ? { ...x, text } : x))
         try {
-          await api.updateEntry(formId, e.id, { name: latest.name, role: latest.role, text: latest.text, blocks: next })
+          await api.updateEntry(formId, e.id, { name: latest.name, role: latest.role, text: latest.text, kind: latest.kind, blocks: next })
           await renderAll()
           toast('已保存内容块')
         } catch (err) {
@@ -454,7 +455,7 @@ export function createPanel(toast: ToastFn): HTMLElement {
             const latest = fresh(e.id)
             if (!latest) return
             try {
-              await api.updateEntry(formId, e.id, { name: latest.name, role: latest.role, text: latest.text, blocks: latest.blocks.filter((x) => x.id !== b.id) })
+              await api.updateEntry(formId, e.id, { name: latest.name, role: latest.role, text: latest.text, kind: latest.kind, blocks: latest.blocks.filter((x) => x.id !== b.id) })
               await renderAll()
               toast('已删除内容块')
             } catch (err) { toastError(err) }
@@ -471,7 +472,7 @@ export function createPanel(toast: ToastFn): HTMLElement {
     if (!latest) return
     const bid = 'b_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8)
     try {
-      await api.updateEntry(formId, entryId, { name: latest.name, role: latest.role, text: latest.text, blocks: [...latest.blocks, { id: bid, text: '' }] })
+      await api.updateEntry(formId, entryId, { name: latest.name, role: latest.role, text: latest.text, kind: latest.kind, blocks: [...latest.blocks, { id: bid, text: '' }] })
       await renderAll()
       toast('已添加内容块')
     } catch (err) { toastError(err) }

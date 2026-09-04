@@ -1,5 +1,5 @@
 import type { FormRow } from './state.ts'
-import type { Block, Entry, EntryRole } from '../types.ts'
+import type { Block, Entry, EntryKind, EntryRole } from '../types.ts'
 
 export interface ApiResult {
   ok: boolean
@@ -17,7 +17,7 @@ export async function apiFetch(path: string, init?: RequestInit): Promise<ApiRes
   return body
 }
 
-export interface EntryInput { name: string; role: EntryRole; text: string; blocks?: Block[] }
+export interface EntryInput { name: string; role: EntryRole; text: string; kind?: EntryKind; blocks?: Block[] }
 
 export function listForms(): Promise<FormRow[]> {
   return apiFetch('/api/prompt/forms').then((r) => r.data as FormRow[])

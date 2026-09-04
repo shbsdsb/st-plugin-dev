@@ -123,14 +123,17 @@ describe('prompt routes', () => {
   it('entries 携带 blocks 创建与更新;非法 blocks → 400', async () => {
     const c = capture({ llm: { send: async () => ({}) } })
     const fid: string = (await c.call('/api/prompt/forms', { name: 'f' }, 'POST')).json.data.id
-    const ok = await c.call(`/api/prompt/forms/${fid}/entries`, { name: 'e', role: 'user', text: '主', blocks: [{ id: 'b_1', text: '块' }] }, 'POST')
+    const ok = await c.call(`/api/prompt/forms/${fid}/entries`, { name: 'e', role: 'user', text: '主', kind: 'grouped', blocks: [{ id: 'b_1', text: '块' }] }, 'POST')
     expect(ok.status).toBe(200)
     const eid: string = ok.json.data.entryId
     const list = await c.call(`/api/prompt/forms/${fid}/entries`)
     expect(list.json.data[0].blocks).toEqual([{ id: 'b_1', text: '块' }])
-    const bad = await c.call(`/api/prompt/forms/${fid}/entries/${eid}`, { name: 'e', role: 'user', text: '', blocks: [{ id: '', text: 'x' }] }, 'PUT')
+    const bad = await c.call(`/api/prompt/forms/${fid}/entries/${eid}`, { name: 'e', role: 'user', text: '', kind: 'grouped', blocks: [{ id: '', text: 'x' }] }, 'PUT')
     expect(bad.status).toBe(400)
     expect(bad.json.message).toContain('内容块')
+    const plainBad = await c.call(`/api/prompt/forms/${fid}/entries`, { name: 'p', role: 'user', text: 'x', kind: 'plain', blocks: [{ id: 'b_2', text: '块' }] }, 'POST')
+    expect(plainBad.status).toBe(400)
+    expect(plainBad.json.message).toContain('普通条目不能包含内容块')
     c.dispose()
   })
 
@@ -154,7 +157,7 @@ describe('prompt routes', () => {
     const sent: Message[][] = []
     const c = capture({ llm: { send: async (m: Message[]) => { sent.push(m); return {} } } })
     const fid: string = (await c.call('/api/prompt/forms', { name: 'f' }, 'POST')).json.data.id
-    await c.call(`/api/prompt/forms/${fid}/entries`, { name: 'e', role: 'user', text: '主', blocks: [{ id: 'b_1', text: '块一' }, { id: 'b_2', text: '' }] }, 'POST')
+    await c.call(`/api/prompt/forms/${fid}/entries`, { name: 'e', role: 'user', text: '主', kind: 'grouped', blocks: [{ id: 'b_1', text: '块一' }, { id: 'b_2', text: '' }] }, 'POST')
     await c.call(`/api/prompt/forms/${fid}/entries`, { name: 'e2', role: 'user', text: '' }, 'POST')
     const r = await c.call(`/api/prompt/forms/${fid}/send`, undefined, 'POST')
     expect(r.status).toBe(200)
