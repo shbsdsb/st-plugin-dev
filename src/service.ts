@@ -28,9 +28,16 @@ export function createLlmPromptService(dep: {
       if (!p) throw new Error('当前激活预设不存在,请在 LLM 面板重新选择')
       const key = (await dep.cred.get(`llm:${activeId}`)) ?? ''
       if (!key) throw new Error('当前预设未保存密钥,请重新保存')
-      const { status, json } = await sendChat(p.format, { baseUrl: p.baseUrl, key, model: p.model, messages }, p.timeout, fetchFn)
-      if (status < 200 || status >= 300) throw new Error(`请求失败: HTTP ${status}`)
-      return json
+      try {
+        const { status, json } = await sendChat(p.format, { baseUrl: p.baseUrl, key, model: p.model, messages }, p.timeout, fetchFn)
+        if (status < 200 || status >= 300) throw new Error(`HTTP ${status}`)
+        return json
+      } catch (e) {
+        const err = e as Error
+        const isTimeout = (err instanceof DOMException && err.name === 'TimeoutError') || /timeout/i.test(err.message)
+        if (isTimeout) throw new Error('请求超时')
+        throw new Error('请求失败: ' + err.message)
+      }
     },
   }
 }

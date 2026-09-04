@@ -181,6 +181,7 @@ export function createConfigPanel(ui: UiToolsLike, api: typeof import('./api.ts'
         const body = { ...state, presetName: state.name, apiKey: key }
         const { id } = await api.createPreset(body)
         state.id = id; state.hasKey = !!key
+        activateCurrent() // 新建保存成功即停留激活(决策:新建须先保存一次才可激活)
       } else {
         await api.updatePreset(state.id, { ...state, presetName: state.name, ...(key ? { apiKey: key } : {}) })
         if (key) state.hasKey = true
@@ -292,11 +293,17 @@ export function createConfigPanel(ui: UiToolsLike, api: typeof import('./api.ts'
   })
   toggleBtn.addEventListener('click', () => { keyInput.type = keyInput.type === 'password' ? 'text' : 'password' })
 
-  // ===== 初始化 =====
+  // ===== 初始化(先恢复持久化 active;取不到则 fallback rows[0];空表走空态不激活) =====
   void (async () => {
     try {
       rows = await api.listPresets()
-      if (rows.length > 0) { state = fromRow(rows[0]); applyStateToForm(); activateCurrent() } else { state = createEmptyState(); applyStateToForm() }
+      if (rows.length === 0) {
+        state = createEmptyState(); applyStateToForm()
+      } else {
+        const activeId = await api.getActive().catch(() => null)
+        const target = rows.find((r) => r.id === activeId) ?? rows[0]
+        state = fromRow(target); applyStateToForm(); activateCurrent()
+      }
     } catch (e) { setStatusNow('加载失败: ' + (e as Error).message, 'error') }
     syncOptions()
   })()

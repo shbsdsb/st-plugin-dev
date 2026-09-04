@@ -49,4 +49,20 @@ describe('llmPrompt service', () => {
     const svc = createLlmPromptService({ db, cred: fakeCred, fetchImpl })
     await expect(svc.send([{ role: 'user', content: 'hi' }])).resolves.toEqual(raw)
   })
+  it('网络错误(fetch reject)包装为中文 请求失败', async () => {
+    createPreset(db, { presetName: 'a', format: 'openai_compatible', vendor: '', baseUrl: 'api.x.com/v1', model: 'm', timeout: 30 })
+    setActivePresetId(db, 1)
+    await fakeCred.set('llm:1', 'k')
+    const fetchImpl = (async () => { throw new TypeError('fetch failed') }) as unknown as typeof fetch
+    const svc = createLlmPromptService({ db, cred: fakeCred, fetchImpl })
+    await expect(svc.send([{ role: 'user', content: 'x' }])).rejects.toThrow('请求失败')
+  })
+  it('超时(DOMException TimeoutError)抛中文 请求超时', async () => {
+    createPreset(db, { presetName: 'a', format: 'openai_compatible', vendor: '', baseUrl: 'api.x.com/v1', model: 'm', timeout: 30 })
+    setActivePresetId(db, 1)
+    await fakeCred.set('llm:1', 'k')
+    const fetchImpl = (async () => { throw new DOMException('The operation timed out', 'TimeoutError') }) as unknown as typeof fetch
+    const svc = createLlmPromptService({ db, cred: fakeCred, fetchImpl })
+    await expect(svc.send([{ role: 'user', content: 'x' }])).rejects.toThrow('请求超时')
+  })
 })
