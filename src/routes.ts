@@ -1,7 +1,7 @@
 // agent_plugin_dev/llm-plugin/src/routes.ts
 import type { DatabaseSync } from 'node:sqlite'
 import type { IncomingMessage, ServerResponse } from 'node:http'
-import { listPresets, getPreset, createPreset, updatePreset, deletePreset, type PresetInput } from './db.ts'
+import { listPresets, getPreset, createPreset, updatePreset, deletePreset, getActivePresetId, setActivePresetId, clearIfActivePreset, type PresetInput } from './db.ts'
 import { buildModelRequest, parseModelList, buildTestRequest, sendJson, isOk } from './format.ts'
 
 export interface CredLike {
@@ -76,6 +76,7 @@ export function registerRoutes(register: Register, dep: { db: DatabaseSync; cred
       if (req.method === 'DELETE') {
         deletePreset(db, id)
         await cred.delete(`llm:${id}`)
+        clearIfActivePreset(db, id)
         return ok(res, { id })
       }
       // PUT
@@ -135,6 +136,18 @@ export function registerRoutes(register: Register, dep: { db: DatabaseSync; cred
       if (status < 200 || status >= 300) return fail(res, `请求失败: HTTP ${status}`)
       ok(res, { ok: isOk(format, json) })
     } catch (e) { fail(res, '请求失败: ' + (e as Error).message) }
+  })
+
+  // /api/llm/active : GET 读激活预设 / PUT 设激活预设
+  add('exact', '/api/llm/active', async (req, res) => {
+    try {
+      if (req.method === 'GET') return ok(res, { id: getActivePresetId(db) })
+      const b = JSON.parse(await readBody(req)) as { id?: number }
+      const id = Number(b.id)
+      if (!Number.isFinite(id) || !getPreset(db, id)) return fail(res, '预设不存在')
+      setActivePresetId(db, id)
+      return ok(res, { id })
+    } catch (e) { fail(res, (e as Error).message) }
   })
 
   return () => disposers.forEach((d) => d())

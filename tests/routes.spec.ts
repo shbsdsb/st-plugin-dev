@@ -120,4 +120,35 @@ describe('routes', () => {
     expect(r.json.message).toEqual(expect.stringContaining('model'))
     c.dispose()
   })
+
+  it('GET /api/llm/active 默认 null', async () => {
+    const c = capture(db)
+    const r = await c.call('/api/llm/active', undefined, 'GET')
+    expect(r.json).toEqual({ ok: true, data: { id: null } })
+  })
+
+  it('PUT /api/llm/active 设激活,GET 返回', async () => {
+    const pid = createPreset(db, { presetName: 'a', format: 'openai_compatible', vendor: '', baseUrl: 'x', model: 'm', timeout: 30 })
+    const c = capture(db)
+    const put = await c.call('/api/llm/active', { id: pid })
+    expect(put.json.ok).toBe(true)
+    const r = await c.call('/api/llm/active', undefined, 'GET')
+    expect(r.json.data.id).toBe(pid)
+  })
+
+  it('PUT /api/llm/active 预设不存在 fail', async () => {
+    const c = capture(db)
+    const r = await c.call('/api/llm/active', { id: 999 })
+    expect(r.json.ok).toBe(false)
+    expect(r.json.message).toContain('预设不存在')
+  })
+
+  it('DELETE 激活的预设后 active 清空', async () => {
+    const pid = createPreset(db, { presetName: 'a', format: 'openai_compatible', vendor: '', baseUrl: 'x', model: 'm', timeout: 30 })
+    const c = capture(db)
+    await c.call('/api/llm/active', { id: pid })
+    await c.call(`/api/llm/presets/${pid}`, undefined, 'DELETE')
+    const r = await c.call('/api/llm/active', undefined, 'GET')
+    expect(r.json.data.id).toBeNull()
+  })
 })
