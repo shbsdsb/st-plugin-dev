@@ -28,7 +28,7 @@ type UiSlots = {
   unregister(slot: string, name: string): void
 }
 type UiTools = {
-  pluginModal(opts: { title?: string; content: string | ((el: HTMLElement) => void) | HTMLElement; actions?: Array<{ label: string; variant?: 'primary' | 'secondary' | 'danger'; onClick?: () => void }>; width?: number }): void
+  pluginModal(opts: { title?: string; content: string | ((el: HTMLElement) => void) | HTMLElement; actions?: Array<{ label: string; variant?: 'primary' | 'secondary' | 'danger'; onClick?: () => void }>; width?: number; source?: string }): void
   toast(msg: string, opts?: { icon?: string }): void
 }
 function uiSlots(): UiSlots | undefined {
@@ -146,6 +146,7 @@ export function openDialog(): void {
   tools.pluginModal({
     title: '插件设置',
     width: 760,
+    source: 'plugin-setting',
     content: (el) => renderDialogContent(el, st),
     actions: [
       { label: '取消' },
