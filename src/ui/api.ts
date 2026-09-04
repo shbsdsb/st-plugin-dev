@@ -1,5 +1,5 @@
 import type { FormRow } from './state.ts'
-import type { Entry, EntryRole } from '../types.ts'
+import type { Block, Entry, EntryRole } from '../types.ts'
 
 export interface ApiResult {
   ok: boolean
@@ -17,7 +17,7 @@ export async function apiFetch(path: string, init?: RequestInit): Promise<ApiRes
   return body
 }
 
-export interface EntryInput { name: string; role: EntryRole; text: string }
+export interface EntryInput { name: string; role: EntryRole; text: string; blocks?: Block[] }
 
 export function listForms(): Promise<FormRow[]> {
   return apiFetch('/api/prompt/forms').then((r) => r.data as FormRow[])
@@ -45,4 +45,7 @@ export function deleteEntry(formId: string, entryId: string): Promise<void> {
 }
 export function sendPrompt(formId: string): Promise<unknown> {
   return apiFetch(`/api/prompt/forms/${formId}/send`, { method: 'POST', body: JSON.stringify({}) }).then((r) => r.data)
+}
+export function reorderEntries(formId: string, ids: string[]): Promise<void> {
+  return apiFetch(`/api/prompt/forms/${formId}/order`, { method: 'PUT', body: JSON.stringify({ ids }) }).then(() => undefined)
 }
