@@ -13,6 +13,9 @@ describe('llm-plugin 骨架', () => {
   it('默认导出为函数', () => {
     expect(typeof apply).toBe('function')
   })
+  it('apply.provide 声明 llmPrompt', () => {
+    expect((apply as unknown as { provide?: string[] }).provide).toContain('llmPrompt')
+  })
 })
 
 describe('llm-plugin 接线', () => {

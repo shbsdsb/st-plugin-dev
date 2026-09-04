@@ -2,6 +2,7 @@
 import { Context } from 'cordis'
 import { initPresets } from './db.ts'
 import { registerRoutes } from './routes.ts'
+import { createLlmPromptService } from './service.ts'
 
 declare module 'cordis' {
   interface Context {
@@ -10,6 +11,7 @@ declare module 'cordis' {
     }
     persistDb: { open(relativePath: string): Promise<import('node:sqlite').DatabaseSync> }
     credential: { set(n: string, s: string): Promise<void>; get(n: string): Promise<string | null>; delete(n: string): Promise<void> }
+    llmPrompt: import('./service.ts').LlmPromptService
   }
 }
 
@@ -26,10 +28,12 @@ export function apply(ctx: Context, _config: Record<string, unknown>) {
     try {
       db = await ctx.persistDb.open('data/llm/presets.db')
       initPresets(db)
+      ctx.llmPrompt = createLlmPromptService({ db, cred: ctx.credential })
       disposeRoutes = registerRoutes(ctx.webServer.register.bind(ctx.webServer), { db, cred: ctx.credential })
       return () => {
         disposeRoutes?.()
         disposeRoutes = null
+        ctx.llmPrompt = null as never
         db?.close()
         db = null
       }
@@ -41,6 +45,7 @@ export function apply(ctx: Context, _config: Record<string, unknown>) {
 }
 
 apply.inject = ['webServer', 'persistDb', 'credential']
+apply.provide = ['llmPrompt']
 apply.Config = EmptyConfigSchema
 
 export default apply
