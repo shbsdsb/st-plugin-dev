@@ -30,7 +30,7 @@ const CSS = `
 .prp .send-btn:hover{background:#3f3f46}
 .prp .send-btn:disabled{opacity:.45;cursor:not-allowed}
 .prp .empty-state{text-align:center;padding:28px 12px;color:#a1a1aa;font-size:13px}
-.prp .overlay{position:fixed;inset:0;background:rgba(0,0,0,.28);z-index:10020;display:flex;align-items:center;justify-content:center;padding:20px}
+.prp.overlay{position:fixed;inset:0;background:rgba(0,0,0,.28);z-index:10020;display:flex;align-items:center;justify-content:center;padding:20px}
 .prp .float-modal{background:#fff;border:1px solid #e0e0e0;box-shadow:0 4px 16px rgba(0,0,0,.12);border-radius:6px;width:min(480px,94vw);display:flex;flex-direction:column;max-height:86vh;overflow:hidden}
 .prp .float-head{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid #eee}
 .prp .float-head b{font-size:14px;color:#18181b}
