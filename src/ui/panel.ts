@@ -16,6 +16,7 @@ export function createPanel(toast: ToastFn): HTMLElement {
   let state: PanelState = createPanelState()
   let rows: Entry[] = []
   let seq = 0 // 防条目渲染竞态:切表单后丢弃过期响应
+  let sending = false // doSend in-flight 保护
   let statusTimer: ReturnType<typeof setTimeout> | null = null
   const toastError = (e: unknown) => toast((e as Error)?.message || '操作失败')
 
@@ -274,8 +275,11 @@ export function createPanel(toast: ToastFn): HTMLElement {
   }
 
   async function doSend(): Promise<void> {
+    if (sending) return // in-flight 保护:防止快速双击并发发送
     const cur = current()
     if (!cur) return
+    sending = true
+    sendBtn.disabled = true
     const count = rows.filter((r) => (r.text || '').trim() !== '').length
     try {
       const payload = await api.sendPrompt(cur.id)
@@ -285,6 +289,9 @@ export function createPanel(toast: ToastFn): HTMLElement {
       const msg = (e as Error)?.message || '发送失败'
       openResult('发送失败', { ok: false, message: msg })
       setStatus('发送失败', 'error')
+    } finally {
+      sending = false
+      updateSend()
     }
   }
 
