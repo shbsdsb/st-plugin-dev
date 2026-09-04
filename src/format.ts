@@ -100,3 +100,38 @@ export function isOk(format: string, json: unknown): boolean {
   if (format === 'anthropic') return Array.isArray(j.content) && j.content.length > 0
   return Array.isArray(j.choices) && j.choices.length > 0
 }
+
+export interface ChatMessage { role: string; content: string }
+
+export async function sendChat(
+  format: string,
+  opts: { baseUrl: string; key: string; model: string; messages: ChatMessage[] },
+  timeout: number,
+  fetchImpl: typeof fetch = fetch,
+): Promise<{ status: number; json: unknown }> {
+  const base = withProtocol(normalizeBase(opts.baseUrl))
+  if (opts.messages.length === 0) throw new Error('messages 不能为空')
+  if (format === 'anthropic') {
+    return sendJson({
+      method: 'POST',
+      url: `${base}/messages`,
+      headers: { 'x-api-key': opts.key, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+      body: JSON.stringify({ model: opts.model, max_tokens: 8, messages: opts.messages }),
+    }, timeout, fetchImpl)
+  }
+  if (format === 'google') {
+    const contents = opts.messages.map((m) => ({ role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: m.content }] }))
+    return sendJson({
+      method: 'POST',
+      url: `${base}/models/${encodeURIComponent(opts.model)}:generateContent?key=${encodeURIComponent(opts.key)}`,
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ contents }),
+    }, timeout, fetchImpl)
+  }
+  return sendJson({
+    method: 'POST',
+    url: `${base}/chat/completions`,
+    headers: { Authorization: `Bearer ${opts.key}`, 'content-type': 'application/json' },
+    body: JSON.stringify({ model: opts.model, messages: opts.messages }),
+  }, timeout, fetchImpl)
+}

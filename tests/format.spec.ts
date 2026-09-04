@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { PROVIDER_BASE_URLS, PROVIDER_FORMATS, normalizeBase, buildModelRequest, parseModelList, buildTestRequest, isOk } from '../src/format.ts'
+import { PROVIDER_BASE_URLS, PROVIDER_FORMATS, normalizeBase, buildModelRequest, parseModelList, buildTestRequest, isOk, sendChat } from '../src/format.ts'
 
 describe('format', () => {
   it('厂商固定 URL / 格式映射', () => {
@@ -42,5 +42,32 @@ describe('format', () => {
     expect(isOk('anthropic', { content: [{}] })).toBe(true)
     expect(isOk('google', { candidates: [{}] })).toBe(true)
     expect(isOk('openai_compatible', {})).toBe(false)
+  })
+})
+
+describe('sendChat', () => {
+  it('openai_compatible: POST {base}/chat/completions, Bearer, body=messages 透传', async () => {
+    let got: { url?: string; init?: RequestInit } = {}
+    const fetchImpl = (async (url: string, init?: RequestInit) => { got = { url, init }; return new Response(JSON.stringify({ choices: [{ message: { content: 'hi' } }] }), { status: 200 }) }) as unknown as typeof fetch
+    const r = await sendChat('openai_compatible', { baseUrl: 'api.deepseek.com/v1', key: 'k', model: 'm1', messages: [{ role: 'user', content: '你好' }] }, 30, fetchImpl)
+    expect(got.url).toBe('https://api.deepseek.com/v1/chat/completions')
+    expect((got.init?.headers as Record<string, string>).Authorization).toBe('Bearer k')
+    expect(JSON.parse(String(got.init?.body))).toEqual({ model: 'm1', messages: [{ role: 'user', content: '你好' }] })
+    expect(r.json).toEqual({ choices: [{ message: { content: 'hi' } }] })
+  })
+  it('anthropic: POST {base}/messages, x-api-key + anthropic-version, body 含 max_tokens', async () => {
+    let got: { url?: string; init?: RequestInit } = {}
+    const fetchImpl = (async (url: string, init?: RequestInit) => { got = { url, init }; return new Response('{"content":[{"text":"ok"}]}', { status: 200 }) }) as unknown as typeof fetch
+    const r = await sendChat('anthropic', { baseUrl: 'api.anthropic.com/v1', key: 'k', model: 'claude', messages: [{ role: 'user', content: 'hi' }] }, 30, fetchImpl)
+    expect(got.url).toBe('https://api.anthropic.com/v1/messages')
+    expect((got.init?.headers as Record<string, string>)['x-api-key']).toBe('k')
+    expect(JSON.parse(String(got.init?.body))).toMatchObject({ model: 'claude', messages: [{ role: 'user', content: 'hi' }] })
+  })
+  it('google: POST {base}/models/{model}:generateContent?key=, body contents 映射 role user|model', async () => {
+    let got: { url?: string; init?: RequestInit } = {}
+    const fetchImpl = (async (url: string, init?: RequestInit) => { got = { url, init }; return new Response('{"candidates":[{"content":{"parts":[{"text":"ok"}]}}]}', { status: 200 }) }) as unknown as typeof fetch
+    const r = await sendChat('google', { baseUrl: 'generativelanguage.googleapis.com/v1beta', key: 'k', model: 'gemini', messages: [{ role: 'user', content: 'a' }, { role: 'assistant', content: 'b' }] }, 30, fetchImpl)
+    expect(got.url).toContain(':generateContent?key=k')
+    expect(JSON.parse(String(got.init?.body)).contents).toEqual([{ role: 'user', parts: [{ text: 'a' }] }, { role: 'model', parts: [{ text: 'b' }] }])
   })
 })
