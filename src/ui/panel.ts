@@ -9,6 +9,7 @@ import { openEntryEditor } from './sub-modal.ts'
 import { confirmDialog } from './confirm.ts'
 import { openResult } from './result-modal.ts'
 import { createLayer, headOf, footOf } from './layers.ts'
+import { attachDrag } from './drag.ts'
 
 type ToastFn = (msg: string) => void
 
@@ -256,7 +257,29 @@ export function createPanel(toast: ToastFn): HTMLElement {
       if (rows.length === 0) {
         listBox.appendChild(el('div', 'prp empty-state', '当前表单没有条目,点击「新建条目」添加'))
       } else {
-        for (const e of rows) listBox.appendChild(renderEntryWrap(e, cur.id))
+        const wraps: HTMLElement[] = []
+        for (const e of rows) wraps.push(renderEntryWrap(e, cur.id))
+        for (const w of wraps) {
+          listBox.appendChild(w)
+          const h = w.querySelector<HTMLElement>('.prp-entry-head .prp-drag-handle')
+          if (h) {
+            attachDrag({
+              handle: h,
+              item: w,
+              container: listBox,
+              onDrop: (items) => {
+                const ids = items.map((it) => it.dataset.entryId ?? '').filter((x) => x !== '')
+                void (async () => {
+                  try {
+                    await api.reorderEntries(cur.id, ids)
+                    await renderAll() // 以服务端为准刷新(失败即回滚)
+                    toast('已保存条目顺序')
+                  } catch (err) { toastError(err) }
+                })()
+              },
+            })
+          }
+        }
       }
       updateSend()
     } catch (e) {
@@ -340,7 +363,36 @@ export function createPanel(toast: ToastFn): HTMLElement {
     blockLabel.textContent = `内容块(${e.blocks.length})(随发送拼入主文本之后)`
     detail.append(main, blockLabel)
     const blockList = el('div', 'prp block-list')
-    for (const b of e.blocks) blockList.appendChild(renderBlockRow(e, formId, b))
+    const blockRows: HTMLElement[] = []
+    for (const b of e.blocks) {
+      const br = renderBlockRow(e, formId, b)
+      blockRows.push(br)
+      blockList.appendChild(br)
+    }
+    for (const br of blockRows) {
+      const h = br.querySelector<HTMLElement>('.prp-drag-handle')
+      if (h) {
+        attachDrag({
+          handle: h,
+          item: br,
+          container: blockList,
+          onDrop: (items) => {
+            const ids = items.map((it) => it.dataset.blockId ?? '').filter((x) => x !== '')
+            const latest = fresh(e.id)
+            if (!latest) return
+            const byId = new Map(latest.blocks.map((x) => [x.id, x]))
+            const blocks = ids.map((id) => byId.get(id)).filter((x): x is Block => !!x)
+            void (async () => {
+              try {
+                await api.updateEntry(formId, e.id, { name: latest.name, role: latest.role, text: latest.text, blocks })
+                await renderAll()
+                toast('已保存内容块顺序')
+              } catch (err) { toastError(err) }
+            })()
+          },
+        })
+      }
+    }
     detail.append(blockList)
     const addBtn = button('prp dashed-btn', '添加内容块', () => void addBlock(e.id, formId))
     detail.appendChild(addBtn)
