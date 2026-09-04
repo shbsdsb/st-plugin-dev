@@ -119,4 +119,46 @@ describe('prompt routes', () => {
     expect(r.json.message).toBe('未选择预设,请先在 LLM 面板选择一套预设')
     c.dispose()
   })
+
+  it('entries 携带 blocks 创建与更新;非法 blocks → 400', async () => {
+    const c = capture({ llm: { send: async () => ({}) } })
+    const fid: string = (await c.call('/api/prompt/forms', { name: 'f' }, 'POST')).json.data.id
+    const ok = await c.call(`/api/prompt/forms/${fid}/entries`, { name: 'e', role: 'user', text: '主', blocks: [{ id: 'b_1', text: '块' }] }, 'POST')
+    expect(ok.status).toBe(200)
+    const eid: string = ok.json.data.entryId
+    const list = await c.call(`/api/prompt/forms/${fid}/entries`)
+    expect(list.json.data[0].blocks).toEqual([{ id: 'b_1', text: '块' }])
+    const bad = await c.call(`/api/prompt/forms/${fid}/entries/${eid}`, { name: 'e', role: 'user', text: '', blocks: [{ id: '', text: 'x' }] }, 'PUT')
+    expect(bad.status).toBe(400)
+    expect(bad.json.message).toContain('内容块')
+    c.dispose()
+  })
+
+  it('PUT /forms/:id/order 成功;非排列 → 400;不存在表单 → 404', async () => {
+    const c = capture({ llm: { send: async () => ({}) } })
+    const fid: string = (await c.call('/api/prompt/forms', { name: 'f' }, 'POST')).json.data.id
+    const a = await c.call(`/api/prompt/forms/${fid}/entries`, { name: 'a', role: 'user', text: '1' }, 'POST')
+    const b = await c.call(`/api/prompt/forms/${fid}/entries`, { name: 'b', role: 'user', text: '2' }, 'POST')
+    const aId: string = a.json.data.entryId
+    const bId: string = b.json.data.entryId
+    const r = await c.call(`/api/prompt/forms/${fid}/order`, { ids: [bId, aId] }, 'PUT')
+    expect(r.status).toBe(200)
+    const list = await c.call(`/api/prompt/forms/${fid}/entries`)
+    expect(list.json.data.map((x: { id: string }) => x.id)).toEqual([bId, aId])
+    expect((await c.call(`/api/prompt/forms/${fid}/order`, { ids: [aId] }, 'PUT')).status).toBe(400)
+    expect((await c.call('/api/prompt/forms/f_ghost/order', { ids: [aId, bId] }, 'PUT')).status).toBe(404)
+    c.dispose()
+  })
+
+  it('send 时带块条目 content 为父 text + 块拼接', async () => {
+    const sent: Message[][] = []
+    const c = capture({ llm: { send: async (m: Message[]) => { sent.push(m); return {} } } })
+    const fid: string = (await c.call('/api/prompt/forms', { name: 'f' }, 'POST')).json.data.id
+    await c.call(`/api/prompt/forms/${fid}/entries`, { name: 'e', role: 'user', text: '主', blocks: [{ id: 'b_1', text: '块一' }, { id: 'b_2', text: '' }] }, 'POST')
+    await c.call(`/api/prompt/forms/${fid}/entries`, { name: 'e2', role: 'user', text: '' }, 'POST')
+    const r = await c.call(`/api/prompt/forms/${fid}/send`, undefined, 'POST')
+    expect(r.status).toBe(200)
+    expect(sent).toEqual([[{ role: 'user', content: '主\n\n块一' }]])
+    c.dispose()
+  })
 })
