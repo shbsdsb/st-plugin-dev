@@ -1,0 +1,36 @@
+// agent_plugin_dev/llm-plugin/src/service.ts
+import type { DatabaseSync } from 'node:sqlite'
+import { getPreset, getActivePresetId } from './db.ts'
+import { sendChat } from './format.ts'
+
+export type LlmPromptRole = 'system' | 'user' | 'assistant'
+export interface LlmPromptMessage { role: LlmPromptRole; content: string }
+export interface LlmPromptService { send(messages: LlmPromptMessage[]): Promise<unknown> }
+
+const VALID_ROLES: LlmPromptRole[] = ['system', 'user', 'assistant']
+
+export function createLlmPromptService(dep: {
+  db: DatabaseSync
+  cred: { get(name: string): Promise<string | null> }
+  fetchImpl?: typeof fetch
+}): LlmPromptService {
+  const fetchFn = dep.fetchImpl ?? fetch
+  return {
+    async send(messages) {
+      if (!Array.isArray(messages) || messages.length === 0) throw new Error('messages 不能为空数组')
+      for (const m of messages) {
+        if (!VALID_ROLES.includes(m.role)) throw new Error(`messages 非法: role 必须是 ${VALID_ROLES.join('/')}`)
+        if (typeof m.content !== 'string' || !m.content) throw new Error('messages 非法: content 必须为非空字符串')
+      }
+      const activeId = getActivePresetId(dep.db)
+      if (activeId == null) throw new Error('未选择预设,请先在 LLM 面板选择一套预设')
+      const p = getPreset(dep.db, activeId)
+      if (!p) throw new Error('当前激活预设不存在,请在 LLM 面板重新选择')
+      const key = (await dep.cred.get(`llm:${activeId}`)) ?? ''
+      if (!key) throw new Error('当前预设未保存密钥,请重新保存')
+      const { status, json } = await sendChat(p.format, { baseUrl: p.baseUrl, key, model: p.model, messages }, p.timeout, fetchFn)
+      if (status < 200 || status >= 300) throw new Error(`请求失败: HTTP ${status}`)
+      return json
+    },
+  }
+}
