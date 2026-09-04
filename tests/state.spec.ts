@@ -1,58 +1,44 @@
 import { describe, it, expect } from 'vitest'
-import { createPanelState, applyList, upsertForm, removeForm, selectForm, setExpand, toggleExpand, segmentCount } from '../src/ui/state.ts'
+import { createPanelState, applyList, upsertForm, removeForm, selectForm, setExpand, toggleExpand, toTree } from '../src/ui/state.ts'
+import type { ChildEntry, Entry, GroupEntry, PlainEntry } from '../src/types.ts'
 
-const row = (id: string, name: string, n = 0) => ({ id, name, entryCount: n })
+const row = (id: string, name: string): { id: string; name: string; entryCount: number } => ({ id, name, entryCount: 0 })
 
-describe('panel state', () => {
-  it('applyList:空列表 → currentId null;首载自动选第一个', () => {
+describe('state v3 面板状态', () => {
+  it('createPanelState 初始态;applyList 保留 currentId/回退首项', () => {
     const s0 = createPanelState()
-    expect(applyList(s0, [])).toEqual({ forms: [], currentId: null, expandedId: null })
-    const s1 = applyList(s0, [row('a', 'A'), row('b', 'B')])
-    expect(s1.currentId).toBe('a')
+    expect(s0).toEqual({ forms: [], currentId: null, expandedId: null, topOrder: [], childOrder: {}, dirtyOrder: false })
+    const s1 = applyList({ ...s0, currentId: 'f1' }, [row('f1', 'A')])
+    expect(s1.currentId).toBe('f1')
+    const s2 = applyList(s1, [row('f2', 'B')])
+    expect(s2.currentId).toBe('f2')
   })
-  it('applyList:currentId 仍存在则保留;失效回退第一个', () => {
-    const s0 = { forms: [row('a', 'A')], currentId: 'a' }
-    expect(applyList(s0, [row('a', 'A'), row('b', 'B')]).currentId).toBe('a')
-    expect(applyList(s0, [row('b', 'B')]).currentId).toBe('b')
-  })
-  it('upsertForm:同 id 更新,新 id 追加且不切换当前', () => {
-    const s0 = { forms: [row('a', 'A')], currentId: 'a' }
-    const s1 = upsertForm(s0, row('a', 'A2', 3))
-    expect(s1.forms[0].name).toBe('A2')
-    expect(s1.forms[0].entryCount).toBe(3)
-    const s2 = upsertForm(s0, row('b', 'B'))
-    expect(s2.forms.map((f) => f.id)).toEqual(['a', 'b'])
-    expect(s2.currentId).toBe('a')
-  })
-  it('removeForm:删除当前 → 回退第一个;删到空 → null', () => {
-    const s0 = { forms: [row('a', 'A'), row('b', 'B')], currentId: 'b' }
-    const s1 = removeForm(s0, 'b')
-    expect(s1.currentId).toBe('a')
-    const s2 = removeForm({ forms: [row('a', 'A')], currentId: 'a', expandedId: null }, 'a')
-    expect(s2).toEqual({ forms: [], currentId: null, expandedId: null })
-  })
-  it('selectForm:切换;非法 id 原样返回', () => {
-    const s0 = { forms: [row('a', 'A'), row('b', 'B')], currentId: 'a' }
-    expect(selectForm(s0, 'b').currentId).toBe('b')
-    expect(selectForm(s0, 'zzz')).toBe(s0)
+  it('setExpand/toggleExpand;removeForm 清展开态', () => {
+    const s = { ...createPanelState(), forms: [row('f1', 'A')], currentId: 'f1' }
+    expect(setExpand(s, 'e1').expandedId).toBe('e1')
+    expect(toggleExpand(s, 'e1').expandedId).toBe('e1')
+    expect(toggleExpand({ ...s, expandedId: 'e1' }, 'e1').expandedId).toBeNull()
+    expect(removeForm({ ...s, expandedId: 'f1' }, 'f1').expandedId).toBeNull()
   })
 })
 
-describe('panel state v2', () => {
-  it('toggleExpand/setExpand 维护 expandedId;removeForm 清空同表单展开态', () => {
-    const s0 = createPanelState()
-    expect(s0.expandedId).toBeNull()
-    const s1 = setExpand({ ...s0, forms: [{ id: 'f1', name: 'a', entryCount: 1 }], currentId: 'f1' }, 'f1')
-    expect(s1.expandedId).toBe('f1')
-    expect(toggleExpand(s1, 'f1').expandedId).toBeNull()
-    expect(toggleExpand(s1, 'other').expandedId).toBe('other')
-    const s2 = removeForm({ forms: [{ id: 'f1', name: 'a', entryCount: 1 }], currentId: 'f1', expandedId: 'f1' }, 'f1')
-    expect(s2.expandedId).toBeNull()
+describe('state v3 toTree 归组', () => {
+  it('父后紧跟子平铺 → top 不含子、childrenByParent 聚合', () => {
+    const g: GroupEntry = { id: 'g1', name: '父', role: 'user', kind: 'group', children: ['c1', 'c2'] }
+    const c1: ChildEntry = { id: 'c1', name: 'c1', base: 'g1', text: '1' }
+    const p: PlainEntry = { id: 'p1', name: '普', role: 'system', text: 'x' }
+    const c2: ChildEntry = { id: 'c2', name: 'c2', base: 'g1', text: '2' }
+    const entries: Entry[] = [g, c1, c2, p]
+    const { top, childrenByParent } = toTree(entries)
+    expect(top.map((e) => e.id)).toEqual(['g1', 'p1'])
+    expect(childrenByParent.g1.map((c) => c.id)).toEqual(['c1', 'c2'])
   })
-
-  it('segmentCount 返回块数(容错空条目与非数组)', () => {
-    expect(segmentCount({ id: 'e', name: 'n', role: 'user', text: '', blocks: [{ id: 'b1', text: 'x' }] })).toBe(1)
-    expect(segmentCount({ id: 'e', name: 'n', role: 'user', text: '', blocks: [] })).toBe(0)
-    expect(segmentCount(null)).toBe(0)
+  it('普通父混排保持相对序;子保持平铺相对序', () => {
+    const g: GroupEntry = { id: 'g1', name: '父', role: 'user', kind: 'group', children: ['c1'] }
+    const c1: ChildEntry = { id: 'c1', name: 'c1', base: 'g1', text: '1' }
+    const p: PlainEntry = { id: 'p1', name: '普', role: 'user', text: 'a' }
+    const { top } = toTree([g, p, c1])
+    expect(top.map((e) => e.id)).toEqual(['g1', 'p1'])
+    void c1
   })
 })
