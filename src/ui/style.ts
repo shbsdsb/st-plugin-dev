@@ -51,6 +51,27 @@ const CSS = `
 .prp .status-dot.error{background:#d9534f}
 .prp .status-text{font-size:12px;color:#52525b}
 .prp .sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+.prp .entry-wrap{display:block}
+.prp .entry-head{display:flex;align-items:center;gap:8px;border:1px solid #e4e4e7;border-radius:8px;padding:6px 10px;background:#fff}
+.prp .entry-head:hover{border-color:#d4d4d8}
+.prp .drag-handle{cursor:grab;color:#c9c9cf;font-size:12px;user-select:none;flex-shrink:0;padding:0 2px}
+.prp .drag-handle:active{cursor:grabbing}
+.prp .pid-empty{flex-shrink:0}
+.prp .entry-detail{margin:2px 0 8px 22px;padding:8px 10px;background:#fafafa;border:1px solid #ececec;border-radius:8px}
+.prp .detail-label{display:block;font-size:12px;color:#8a8a92;margin:4px 0}
+.prp .detail-text{font-size:12px;color:#6b6b73;white-space:pre-wrap;word-break:break-all;max-height:96px;overflow:auto;background:#fff;border:1px solid #efefef;border-radius:6px;padding:6px 8px;margin-bottom:6px}
+.prp .block-list{display:block}
+.prp .block-row{display:flex;align-items:flex-start;gap:6px;margin:4px 0;background:#fff;border:1px solid #f0f0f0;border-radius:6px;padding:4px}
+.prp .block-row:hover{border-color:#e0e0e0}
+.prp .block-textarea{flex:1;min-height:44px;resize:vertical;font-family:inherit;font-size:12px;line-height:1.6;border:1px solid #e4e4e9;border-radius:6px;padding:5px 7px;background:#fff}
+.prp .block-textarea:focus{outline:none;border-color:#b9b9c2}
+.prp .dashed-btn{border:1px dashed #c9c9cf;background:none;color:#6b6b73;border-radius:6px;padding:4px 10px;cursor:pointer;font-size:12px;margin-top:6px}
+.prp .dashed-btn:hover{background:#f4f4f5;color:#18181b}
+.prp .wizard-tip{font-size:12px;color:#8a8a92;margin-bottom:8px}
+.prp .wizard-opt{display:block;width:100%;text-align:left;border:1px solid #e4e4e9;background:#fff;border-radius:8px;padding:10px 12px;cursor:pointer;font-size:13px;color:#333;margin-bottom:6px}
+.prp .wizard-opt:hover{border-color:#b9b9c2;background:#fafafa}
+.prp .entry-list.prp-dragging .entry-head,.prp .block-list.prp-dragging .block-row{transition:transform .12s ease}
+.prp .drag-ghost{opacity:.85;box-shadow:0 6px 18px rgba(0,0,0,.12);z-index:20;position:relative}
 `
 export function ensureStyle(): void {
   if (document.getElementById(STYLE_ID)) return
