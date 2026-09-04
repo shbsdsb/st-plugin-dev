@@ -233,6 +233,8 @@ export function createPanel(toast: ToastFn): HTMLElement {
       const { entryId } = await api.createEntry(cur.id, { name: '新条目', role: 'user', text: '', blocks: [] })
       state = setExpand(state, entryId)
       await renderAll()
+      const addBtn = listBox.querySelector<HTMLButtonElement>(`.prp-entry-wrap[data-entry-id="${entryId}"] .prp.dashed-btn`)
+      addBtn?.focus() // spec §6.1:创建后焦点落「添加内容块」
       toast('已创建,点击「添加内容块」填入段落')
     } catch (e) { toastError(e) }
   }
@@ -272,9 +274,12 @@ export function createPanel(toast: ToastFn): HTMLElement {
                 void (async () => {
                   try {
                     await api.reorderEntries(cur.id, ids)
-                    await renderAll() // 以服务端为准刷新(失败即回滚)
+                    await renderAll() // 以服务端为准刷新
                     toast('已保存条目顺序')
-                  } catch (err) { toastError(err) }
+                  } catch (err) {
+                    toastError(err)
+                    await renderAll() // 失败:恢复服务端原序(spec §6.3 回滚)
+                  }
                 })()
               },
             })
@@ -363,12 +368,15 @@ export function createPanel(toast: ToastFn): HTMLElement {
     blockLabel.textContent = `内容块(${e.blocks.length})(随发送拼入主文本之后)`
     detail.append(main, blockLabel)
     const blockList = el('div', 'prp block-list')
-    const blockRows: HTMLElement[] = []
-    for (const b of e.blocks) {
-      const br = renderBlockRow(e, formId, b)
-      blockRows.push(br)
-      blockList.appendChild(br)
-    }
+    if (e.blocks.length === 0) {
+      blockList.appendChild(el('div', 'prp block-empty', '暂无内容块,点击下方「添加内容块」'))
+    } else {
+      const blockRows: HTMLElement[] = []
+      for (const b of e.blocks) {
+        const br = renderBlockRow(e, formId, b)
+        blockRows.push(br)
+        blockList.appendChild(br)
+      }
     for (const br of blockRows) {
       const h = br.querySelector<HTMLElement>('.prp-drag-handle')
       if (h) {
@@ -387,11 +395,15 @@ export function createPanel(toast: ToastFn): HTMLElement {
                 await api.updateEntry(formId, e.id, { name: latest.name, role: latest.role, text: latest.text, blocks })
                 await renderAll()
                 toast('已保存内容块顺序')
-              } catch (err) { toastError(err) }
+              } catch (err) {
+                toastError(err)
+                await renderAll() // 失败:恢复服务端原序(spec §6.3 回滚)
+              }
             })()
           },
         })
       }
+    }
     }
     detail.append(blockList)
     const addBtn = button('prp dashed-btn', '添加内容块', () => void addBlock(e.id, formId))
@@ -410,6 +422,11 @@ export function createPanel(toast: ToastFn): HTMLElement {
     ta.rows = Math.max(2, Math.min(8, (b.text.match(/\n/g)?.length ?? 0) + 1))
     const saved = (): void => {
       const text = ta.value
+      if (text.length > 20000) {
+        ta.value = b.text // 前端护栏:与后端上限一致,超限不提交
+        toast('内容块文本最长 20000 字符')
+        return
+      }
       if (text === b.text) return
       void (async () => {
         const latest = fresh(e.id)

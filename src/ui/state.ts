@@ -34,7 +34,8 @@ export function upsertForm(s: PanelState, row: FormRow): PanelState {
 export function removeForm(s: PanelState, id: string): PanelState {
   const forms = s.forms.filter((f) => f.id !== id)
   const currentId = s.currentId === id ? fallback(forms, null) : s.currentId
-  const expandedId = s.expandedId === id ? null : s.expandedId
+  // expandedId 存的是条目 id,无法判断是否属被删表单;删除表单即收起展开(spec:删除后切到剩余表单,展开态无意义)
+  const expandedId = s.expandedId === id || s.currentId === id ? null : s.expandedId
   return { forms, currentId, expandedId }
 }
 
