@@ -73,6 +73,11 @@ const CSS = `
 .prp .wizard-opt:hover{border-color:#b9b9c2;background:#fafafa}
 .prp .entry-list.prp-dragging .entry-head,.prp .block-list.prp-dragging .block-row{transition:transform .12s ease}
 .prp .drag-ghost{opacity:.85;box-shadow:0 6px 18px rgba(0,0,0,.12);z-index:20;position:relative}
+.prp .save-order-btn{margin-left:0;padding:9px 18px;font-size:13px;font-weight:600;border:1px dashed #71717a;border-radius:8px;background:#fff;color:#52525b;cursor:pointer}
+.prp .save-order-btn:hover:not(:disabled){background:#f4f4f5;border-style:solid}
+.prp .save-order-btn:disabled{opacity:.45;cursor:not-allowed}
+.prp .child-preview{flex:1;min-width:0;font-size:12px;color:#71717a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.6;padding-top:6px}
+.prp .block-row .entry-name{flex-shrink:0;max-width:140px}
 `
 export function ensureStyle(): void {
   if (document.getElementById(STYLE_ID)) return

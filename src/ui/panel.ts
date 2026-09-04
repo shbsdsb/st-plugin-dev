@@ -1,11 +1,11 @@
 import type { FormRow, PanelState } from './state.ts'
-import { createPanelState, applyList, upsertForm, removeForm, selectForm, setExpand, toggleExpand, segmentCount } from './state.ts'
+import { createPanelState, applyList, upsertForm, removeForm, selectForm, setExpand, toggleExpand, toTree } from './state.ts'
 import * as api from './api.ts'
-import type { Block, Entry } from '../types.ts'
-import { entryContent } from '../messages.ts'
+import type { ChildEntry, Entry, GroupEntry } from '../types.ts'
+import { isGroup, isPlain } from '../messages.ts'
 import { ensureStyle } from './style.ts'
 import { el, button } from './dom.ts'
-import { openEntryEditor } from './sub-modal.ts'
+import { openEntryEditor, openGroupCreator, openChildCreator, openChildEditor } from './sub-modal.ts'
 import { confirmDialog } from './confirm.ts'
 import { openResult } from './result-modal.ts'
 import { createLayer, headOf, footOf } from './layers.ts'
@@ -18,66 +18,284 @@ export function createPanel(toast: ToastFn): HTMLElement {
   const root = el('div', 'prp')
   let state: PanelState = createPanelState()
   let rows: Entry[] = []
-  let seq = 0 // 防条目渲染竞态:切表单后丢弃过期响应
-  let sending = false // doSend in-flight 保护
-  let statusTimer: ReturnType<typeof setTimeout> | null = null
+  let savingOrder = false // 保存顺序在途保护
   const toastError = (e: unknown) => toast((e as Error)?.message || '操作失败')
 
-  // ===== DOM 骨架(三段 + 发送行;布局对应验收 demo) =====
+  // ===== DOM 骨架 =====
   const formBar = el('div', 'prp row-preset')
   const actionsRow = el('div', 'prp row-actions')
   const entriesLabel = el('label')
-  entriesLabel.textContent = '条目(按顺序组成 messages)'
+  entriesLabel.textContent = '条目(父条目聚合其子条目组成一条消息)'
   const listBox = el('div', 'prp entry-list')
   const entriesWrap = el('div', 'prp fg')
   entriesWrap.append(entriesLabel, listBox)
   const sendBtn = button('prp send-btn', '发送 Prompt', () => void doSend())
   sendBtn.disabled = true
+  const saveOrderBtn = button('prp save-order-btn', '保存顺序', () => void doSaveOrder())
+  saveOrderBtn.disabled = true
   const beta = el('span', 'prp pid', '测试版')
   const dot = el('span', 'prp status-dot')
   const statusText = el('span', 'prp status-text', '就绪')
   const statusRow = el('div', 'prp status-row')
   statusRow.append(dot, statusText)
   const sendRow = el('div', 'prp row-bottom')
-  sendRow.append(sendBtn, beta, statusRow)
+  sendRow.append(sendBtn, saveOrderBtn, beta, statusRow)
   root.append(formBar, actionsRow, entriesWrap, sendRow)
 
   const setStatus = (msg: string, type: 'success' | 'error' | 'idle') => {
     dot.className = 'prp status-dot' + (type === 'success' ? ' success' : type === 'error' ? ' error' : '')
     statusText.textContent = msg
-    if (statusTimer) clearTimeout(statusTimer)
-    if (type === 'idle') return
-    statusTimer = setTimeout(() => { dot.className = 'prp status-dot'; statusText.textContent = '就绪' }, 3000)
+    if (type !== 'idle') setTimeout(() => { statusText.textContent = '就绪' }, 3000)
   }
 
-  // ===== 数据 =====
   const current = (): FormRow | null => state.forms.find((f) => f.id === state.currentId) ?? null
-  /** 取 rows 缓存中该条目最新实例(连续操作不复活旧 blocks) */
-  const fresh = (entryId: string): Entry | undefined => rows.find((r) => r.id === entryId)
 
-  async function refreshForms(): Promise<void> {
+  function curId(): string {
+    const cur = current()
+    if (!cur) throw new Error('请先新建一个表单')
+    return cur.id
+  }
+
+  async function refreshAll(): Promise<void> {
+    const cur = current()
+    if (!cur) { renderEmpty('暂无表单,点击「新建表单」开始'); updateSendAndSave(); return }
     try {
-      state = applyList(state, await api.listForms())
-      renderBar()
-      renderActions()
-      await renderEntries()
-    } catch (e) { toastError(e) }
+      rows = await api.listEntries(cur.id)
+      // 首次载入或保存成功后,以服务端序重置内存序(仅当无未保存脏序时)
+      if (!state.dirtyOrder) {
+        const { top } = toTree(rows)
+        state = { ...state, topOrder: top.map((e) => e.id), childOrder: childOrderOf(rows) }
+      }
+      renderList()
+    } catch (e) {
+      renderEmpty('条目加载失败:' + ((e as Error)?.message ?? e))
+    }
+    updateSendAndSave()
   }
 
-  async function renderAll(): Promise<void> {
-    renderBar()
-    renderActions()
-    await renderEntries()
+  function childOrderOf(list: Entry[]): Record<string, string[]> {
+    const out: Record<string, string[]> = {}
+    for (const e of list) {
+      if (isGroup(e)) out[e.id] = [...e.children]
+    }
+    return out
   }
 
-  // ---------- 顶部条:下拉切换 + pid + 改名/新建表单 ----------
+  function renderEmpty(msg: string): void {
+    listBox.innerHTML = ''
+    listBox.appendChild(el('div', 'prp empty-state', msg))
+  }
+
+  function renderList(): void {
+    const { top, childrenByParent } = toTree(rows)
+    listBox.innerHTML = ''
+    if (top.length === 0) {
+      listBox.appendChild(el('div', 'prp empty-state', '当前表单没有条目,点击「新建条目」添加'))
+      return
+    }
+    for (const e of top) {
+      const wrap = renderTopRow(e, childrenByParent)
+      listBox.appendChild(wrap)
+      bindTopDrag(wrap, e)
+    }
+  }
+
+  function renderTopRow(e: Entry, childrenByParent: Record<string, ChildEntry[]>): HTMLElement {
+    const wrap = el('div', 'prp entry-wrap')
+    wrap.dataset.entryId = e.id
+    const head = el('div', 'prp entry-head')
+    const handle = el('span', 'prp drag-handle', '⋮⋮')
+    handle.title = '拖动排序(纯前端,点「保存顺序」提交)'
+    const name = el('span', 'prp entry-name', e.name)
+    name.title = e.name
+    const group = isGroup(e)
+    const role = el('span', 'prp entry-role', isGroup(e) ? e.role : isPlain(e) ? e.role : '')
+    const expanded = state.expandedId === e.id
+    const caretBtn = button('prp text-btn', '', () => { if (group) void doToggleExpand(e.id) })
+    caretBtn.textContent = group ? (expanded ? '收起' : '展开') : ''
+    if (!group) caretBtn.style.visibility = 'hidden'
+    const segPid = group
+      ? el('span', 'prp pid', `${(e as GroupEntry).children.length} 子`)
+      : el('span', 'prp pid-empty')
+    const spacer = el('span', 'prp entry-spacer')
+    const editBtn = button('prp text-btn', '编辑', () => {
+      if (group) {
+        openEntryEditor({
+          title: '编辑父条目', entry: { name: e.name, role: e.role }, withRole: true, withText: false,
+          onSave: async (input) => {
+            if (!input.name) { toast('名称不能为空'); throw new Error('名称不能为空') }
+            try { await api.updateEntry(curId(), e.id, { name: input.name, role: input.role }); await refreshAll(); toast('已保存') }
+            catch (err) { toastError(err); throw err }
+          },
+        })
+      } else if (isPlain(e)) {
+        openEntryEditor({
+          title: '编辑条目', entry: { name: e.name, role: e.role, text: e.text }, withRole: true, withText: true,
+          onSave: async (input) => {
+            if (!input.name) { toast('名称不能为空'); throw new Error('名称不能为空') }
+            try { await api.updateEntry(curId(), e.id, { name: input.name, role: input.role, text: input.text }); await refreshAll(); toast('已保存') }
+            catch (err) { toastError(err); throw err }
+          },
+        })
+      }
+    })
+    const delBtn = button('prp text-btn danger', '删除', () => {
+      const children = group ? (e as GroupEntry).children.length : 0
+      confirmDialog({
+        title: group ? '删除父条目' : '删除条目',
+        desc: group && children > 0
+          ? `确定要删除父条目「${e.name}」及其 ${children} 个子条目吗?此操作不可撤销。`
+          : `确定要删除${group ? '父条目' : '条目'}「${e.name}」吗?`,
+        onOk: () => { void (async () => {
+          try { await api.deleteEntry(curId(), e.id); await refreshAll(); toast('已删除') }
+          catch (err) { toastError(err) }
+        })() },
+      })
+    })
+    head.append(handle, name, role, segPid, caretBtn, spacer, editBtn, delBtn)
+    wrap.appendChild(head)
+    if (group && expanded) {
+      const children = childrenByParent[e.id] ?? []
+      wrap.appendChild(renderDetail(e as GroupEntry, children))
+    }
+    return wrap
+  }
+
+  function renderDetail(g: GroupEntry, children: ChildEntry[]): HTMLElement {
+    const detail = el('div', 'prp entry-detail')
+    const label = el('label', 'prp detail-label')
+    label.textContent = `子条目(${children.length})—— role 取父条目 ${g.role},text 按序拼入父内容`
+    detail.append(label)
+    const childList = el('div', 'prp block-list')
+    if (children.length === 0) {
+      childList.appendChild(el('div', 'prp block-empty', '暂无子条目,点击下方「新建子条目」'))
+    } else {
+      for (const c of children) {
+        const rowEl = renderChildRow(g, c)
+        childList.appendChild(rowEl)
+        bindChildDrag(rowEl, g)
+      }
+    }
+    detail.append(childList)
+    detail.appendChild(button('prp dashed-btn', '新建子条目', () => void doCreateChild(g)))
+    return detail
+  }
+
+  function renderChildRow(g: GroupEntry, c: ChildEntry): HTMLElement {
+    const rowEl = el('div', 'prp block-row')
+    rowEl.dataset.blockId = c.id
+    const handle = el('span', 'prp drag-handle', '⋮⋮')
+    handle.title = '拖动排序(纯前端,点「保存顺序」提交)'
+    const name = el('span', 'prp entry-name', c.name)
+    const preview = el('span', 'prp child-preview', c.text.trim() === '' ? '(空)' : c.text)
+    preview.title = c.text
+    const editBtn = button('prp text-btn', '编辑', () => {
+      openChildEditor({
+        entry: { name: c.name, text: c.text },
+        onSave: async (input) => {
+          if (!input.name) { toast('名称不能为空'); throw new Error('名称不能为空') }
+          try { await api.updateEntry(curId(), c.id, { name: input.name, text: input.text }); await refreshAll(); toast('已保存') }
+          catch (err) { toastError(err); throw err }
+        },
+      })
+    })
+    const delBtn = button('prp text-btn danger', '删除', () => {
+      confirmDialog({
+        title: '删除子条目', desc: `确定要删除子条目「${c.name}」吗?`, onOk: () => { void (async () => {
+          try { await api.deleteEntry(curId(), c.id); await refreshAll(); toast('已删除') }
+          catch (err) { toastError(err) }
+        })() },
+      })
+    })
+    rowEl.append(handle, name, preview, editBtn, delBtn)
+    void g
+    return rowEl
+  }
+
+  // ---------- 顶层拖拽(纯前端内存序) ----------
+  function bindTopDrag(w: HTMLElement, _e: Entry): void {
+    const h = w.querySelector<HTMLElement>('.entry-head .drag-handle')
+    if (!h) return
+    attachDrag({ handle: h, item: w, container: listBox, onDrop: (items) => {
+      const ids = items.map((it) => it.dataset.entryId ?? '').filter((x) => x !== '')
+      if (ids.length !== state.topOrder.length) return
+      if (ids.join('|') === state.topOrder.join('|')) return
+      state = { ...state, topOrder: ids, dirtyOrder: true }
+      updateSendAndSave()
+    } })
+  }
+
+  // ---------- 子条目拖拽(纯前端内存序) ----------
+  function bindChildDrag(rowEl: HTMLElement, g: GroupEntry): void {
+    const h = rowEl.querySelector<HTMLElement>('.drag-handle')
+    if (!h || !rowEl.parentElement) return
+    const container = rowEl.parentElement
+    attachDrag({ handle: h, item: rowEl, container, onDrop: (items) => {
+      const ids = items.map((it) => it.dataset.blockId ?? '').filter((x) => x !== '')
+      const cur = state.childOrder[g.id] ?? []
+      if (ids.length !== cur.length) return
+      if (ids.join('|') === cur.join('|')) return
+      state = { ...state, childOrder: { ...state.childOrder, [g.id]: ids }, dirtyOrder: true }
+      updateSendAndSave()
+    } })
+  }
+
+  async function doSaveOrder(): Promise<void> {
+    if (savingOrder) return
+    const cur = current()
+    if (!cur || !state.dirtyOrder) return
+    savingOrder = true
+    saveOrderBtn.disabled = true
+    try {
+      await api.saveLayout(cur.id, { entries: state.topOrder, children: state.childOrder })
+      state = { ...state, dirtyOrder: false }
+      await refreshAll()
+      toast('已保存顺序')
+    } catch (e) {
+      toastError(e)
+      // 回滚:重新拉服务端序
+      state = { ...state, dirtyOrder: false }
+      await refreshAll()
+    } finally {
+      savingOrder = false
+      updateSendAndSave()
+    }
+  }
+
+  // ---------- 发送 ----------
+  function updateSendAndSave(): void {
+    const cur = current()
+    const { childrenByParent } = toTree(rows)
+    const hasContent = rows.some((e) => {
+      if (isGroup(e)) {
+        const children = childrenByParent[e.id] ?? []
+        return children.some((c) => c.text.trim() !== '')
+      }
+      if (isPlain(e)) return e.text.trim() !== ''
+      return false
+    })
+    sendBtn.disabled = !cur || !hasContent
+    saveOrderBtn.disabled = !state.dirtyOrder
+  }
+
+  async function doSend(): Promise<void> {
+    const cur = current()
+    if (!cur) return
+    try {
+      const payload = await api.sendPrompt(cur.id)
+      openResult('已发送(普通条目独立成消息;父条目聚合其子条目)', payload)
+      setStatus('已发送', 'success')
+    } catch (e) {
+      openResult('发送失败', { ok: false, message: (e as Error)?.message || '发送失败' })
+      setStatus('发送失败', 'error')
+    }
+  }
+
+  // ---------- 表单/操作行 ----------
   function renderBar(): void {
     formBar.innerHTML = ''
     if (state.forms.length === 0) {
-      const hint = el('span')
-      hint.textContent = '暂无表单'
-      hint.style.cssText = 'color:#a1a1aa;flex:1;min-width:0'
-      formBar.appendChild(hint)
+      formBar.appendChild(el('span', '', '暂无表单'))
       return
     }
     const sel = document.createElement('select')
@@ -90,7 +308,8 @@ export function createPanel(toast: ToastFn): HTMLElement {
     }
     sel.addEventListener('change', () => {
       state = selectForm(state, sel.value)
-      void renderAll()
+      state = { ...state, expandedId: null, dirtyOrder: false, topOrder: [], childOrder: {} }
+      void refreshAll(); renderBar()
     })
     const cur = current()
     formBar.appendChild(sel)
@@ -105,15 +324,12 @@ export function createPanel(toast: ToastFn): HTMLElement {
     formBar.innerHTML = ''
     const input = el('input') as HTMLInputElement
     input.value = cur.name
-    formBar.appendChild(input)
     input.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') void confirmRename(input)
       if (e.key === 'Escape') renderBar()
     })
-    formBar.appendChild(button('prp text-btn', '确定', () => void confirmRename(input)))
-    formBar.appendChild(button('prp text-btn', '取消', () => renderBar()))
-    input.focus()
-    input.select()
+    formBar.append(input, button('prp text-btn', '确定', () => void confirmRename(input)), button('prp text-btn', '取消', () => renderBar()))
+    input.focus(); input.select()
   }
 
   async function confirmRename(input: HTMLInputElement): Promise<void> {
@@ -124,25 +340,10 @@ export function createPanel(toast: ToastFn): HTMLElement {
     try {
       await api.renameForm(cur.id, name)
       state = upsertForm(state, { ...cur, name })
-      await renderEntries()
-      renderBar()
-      toast('已更新表单名称')
+      renderBar(); toast('已更新表单名称')
     } catch (e) { toastError(e) }
   }
 
-  // ---------- 操作行 ----------
-  function renderActions(): void {
-    actionsRow.innerHTML = ''
-    const hasForm = state.forms.length > 0
-    const newFormBtn = button('', '新建表单', () => void doCreateForm())
-    const newEntryBtn = button('', '新建条目', () => void doCreateEntry())
-    const deleteFormBtn = button('danger', '删除表单', () => confirmDeleteForm())
-    newEntryBtn.disabled = !hasForm
-    deleteFormBtn.disabled = !hasForm
-    actionsRow.append(newFormBtn, newEntryBtn, deleteFormBtn)
-  }
-
-  // ---------- 表单操作 ----------
   function defaultFormName(): string {
     const base = '新预设'
     const names = new Set(state.forms.map((f) => f.name))
@@ -155,358 +356,121 @@ export function createPanel(toast: ToastFn): HTMLElement {
     const name = defaultFormName()
     try {
       const { id } = await api.createForm(name)
-      state = upsertForm(state, { id, name, entryCount: 0 })
-      state = selectForm(state, id)
-      await renderAll()
-      toast('已创建新表单')
+      state = selectForm(upsertForm(state, { id, name, entryCount: 0 }), id)
+      state = { ...state, expandedId: null, dirtyOrder: false, topOrder: [], childOrder: {} }
+      await refreshAll(); renderBar(); renderActions(); toast('已创建新表单')
     } catch (e) { toastError(e) }
+  }
+
+  function renderActions(): void {
+    actionsRow.innerHTML = ''
+    const hasForm = state.forms.length > 0
+    const newEntryBtn = button('', '新建条目', () => doCreateEntryWizard())
+    const deleteFormBtn = button('danger', '删除表单', () => confirmDeleteForm())
+    newEntryBtn.disabled = !hasForm
+    deleteFormBtn.disabled = !hasForm
+    actionsRow.append(newEntryBtn, deleteFormBtn)
+  }
+
+  function doCreateEntryWizard(): void {
+    if (!current()) { toast('请先新建一个表单'); return }
+    askEntryKind()
+  }
+
+  function askEntryKind(): void {
+    const { modal, close } = createLayer('min(380px,90vw)')
+    headOf(modal, '新建条目', close)
+    const body = el('div', 'prp float-body')
+    body.appendChild(el('div', 'prp wizard-tip', '请选择要创建的条目类型'))
+    const plainBtn = document.createElement('button')
+    plainBtn.className = 'prp wizard-opt'; plainBtn.type = 'button'; plainBtn.textContent = '普通条目(独立成一条消息)'
+    plainBtn.addEventListener('click', () => { close(); void createPlainEntry() })
+    const groupBtn = document.createElement('button')
+    groupBtn.className = 'prp wizard-opt'; groupBtn.type = 'button'; groupBtn.textContent = '父条目(占位,子条目聚合为一条消息)'
+    groupBtn.addEventListener('click', () => { close(); createGroupEntry() })
+    body.append(plainBtn, groupBtn)
+    modal.appendChild(body)
+    footOf(modal, [{ label: '取消', variant: 's', onClick: close }])
+    setTimeout(() => plainBtn.focus(), 30)
+  }
+
+  async function createPlainEntry(): Promise<void> {
+    const id = curId()
+    try {
+      const { entryId } = await api.createEntry(id, { name: '新条目', role: 'user', text: '' })
+      await refreshAll()
+      const created = rows.find((r) => r.id === entryId)
+      if (created && isPlain(created)) {
+        openEntryEditor({
+          title: '编辑条目', entry: { name: created.name, role: created.role, text: created.text }, withRole: true, withText: true,
+          onSave: async (input) => {
+            if (!input.name) { toast('名称不能为空'); throw new Error('名称不能为空') }
+            try { await api.updateEntry(id, entryId, { name: input.name, role: input.role, text: input.text }); await refreshAll(); toast('已保存') }
+            catch (err) { toastError(err); throw err }
+          },
+        })
+      }
+    } catch (e) { toastError(e) }
+  }
+
+  function createGroupEntry(): void {
+    const id = curId()
+    openGroupCreator({
+      title: '新建父条目(选择 role 作为聚合消息角色)',
+      onSave: async (input) => {
+        try {
+          const { entryId } = await api.createEntry(id, { name: input.name, role: input.role, kind: 'group' })
+          state = setExpand(state, entryId)
+          await refreshAll()
+          const addBtn = listBox.querySelector<HTMLButtonElement>(`.entry-wrap[data-entry-id="${entryId}"] .dashed-btn`)
+          addBtn?.focus()
+          toast('已创建父条目,点击「新建子条目」填入内容')
+        } catch (e) { toastError(e) }
+      },
+    })
+  }
+
+  async function doCreateChild(g: GroupEntry): Promise<void> {
+    const id = curId()
+    openChildCreator({
+      onSave: async (input) => {
+        try {
+          await api.createEntry(id, { name: input.name, base: g.id, text: input.text })
+          await refreshAll()
+          toast('已新建子条目')
+        } catch (e) { toastError(e) }
+      },
+    })
+  }
+
+  async function doToggleExpand(entryId: string): Promise<void> {
+    state = toggleExpand(state, entryId)
+    renderList()
   }
 
   function confirmDeleteForm(): void {
     const cur = current()
     if (!cur) return
     confirmDialog({
-      title: '删除表单',
-      desc: `确定要删除表单「${cur.name}」及其所有条目吗?此操作不可撤销。`,
-      onOk: () => {
-        void (async () => {
-          try {
-            await api.deleteForm(cur.id)
-            state = removeForm(state, cur.id)
-            await renderAll()
-            toast('已删除表单')
-          } catch (e) { toastError(e) }
-        })()
-      },
-    })
-  }
-
-  // ---------- 新建条目(类型向导) ----------
-  async function doCreateEntry(): Promise<void> {
-    const cur = current()
-    if (!cur) { toast('请先新建一个表单'); return }
-    askEntryKind(cur)
-  }
-
-  function askEntryKind(cur: FormRow): void {
-    const { modal, close } = createLayer('min(380px,90vw)')
-    headOf(modal, '新建条目', close)
-
-    const body = el('div', 'prp float-body')
-    const tip = el('div', 'prp wizard-tip', '请选择要创建的条目类型')
-    const normal = document.createElement('button')
-    normal.className = 'prp wizard-opt'
-    normal.type = 'button'
-    normal.textContent = '普通条目'
-    normal.addEventListener('click', () => { close(); void createPlain(cur) })
-    const grouped = document.createElement('button')
-    grouped.className = 'prp wizard-opt'
-    grouped.type = 'button'
-    grouped.textContent = '带内容块的条目'
-    grouped.addEventListener('click', () => { close(); void createGrouped(cur) })
-    body.append(tip, normal, grouped)
-    modal.appendChild(body)
-    footOf(modal, [{ label: '取消', variant: 's', onClick: close }])
-    setTimeout(() => normal.focus(), 30)
-  }
-
-  async function createPlain(cur: FormRow): Promise<void> {
-    try {
-      const { entryId } = await api.createEntry(cur.id, { name: '新条目', role: 'user', text: '', kind: 'plain', blocks: [] })
-      await renderAll()
-      openEntryEditor({
-        entry: { id: entryId, name: '新条目', role: 'user', text: '', kind: 'plain', blocks: [] },
-        onSave: async (input) => {
-          if (!input.name) { toast('条目名称不能为空'); throw new Error('条目名称不能为空') }
-          try {
-            await api.updateEntry(cur.id, entryId, { ...input, kind: 'plain', blocks: [] })
-            await renderAll()
-            toast('已保存条目')
-          } catch (e) { toastError(e); throw e }
-        },
-      })
-    } catch (e) { toastError(e) }
-  }
-
-  async function createGrouped(cur: FormRow): Promise<void> {
-    try {
-      const { entryId } = await api.createEntry(cur.id, { name: '新条目', role: 'user', text: '', kind: 'grouped', blocks: [] })
-      state = setExpand(state, entryId)
-      await renderAll()
-      const addBtn = listBox.querySelector<HTMLButtonElement>(`.entry-wrap[data-entry-id="${entryId}"] .dashed-btn`)
-      addBtn?.focus() // spec §6.1:创建后焦点落「添加内容块」
-      toast('已创建,点击「添加内容块」填入段落')
-    } catch (e) { toastError(e) }
-  }
-
-  // ---------- 条目列表 ----------
-  async function renderEntries(): Promise<void> {
-    const my = ++seq
-    const cur = current()
-    entriesLabel.style.display = cur ? '' : 'none'
-    if (!cur) {
-      listBox.innerHTML = ''
-      listBox.appendChild(el('div', 'prp empty-state', '暂无表单,点击「新建表单」开始'))
-      rows = []
-      updateSend()
-      return
-    }
-    try {
-      const list = await api.listEntries(cur.id)
-      if (my !== seq) return // 已切换表单,丢弃过期渲染
-      rows = list
-      listBox.innerHTML = ''
-      if (rows.length === 0) {
-        listBox.appendChild(el('div', 'prp empty-state', '当前表单没有条目,点击「新建条目」添加'))
-      } else {
-        const wraps: HTMLElement[] = []
-        for (const e of rows) wraps.push(renderEntryWrap(e, cur.id))
-        for (const w of wraps) {
-          listBox.appendChild(w)
-          const h = w.querySelector<HTMLElement>('.entry-head .drag-handle')
-          if (h) {
-            attachDrag({
-              handle: h,
-              item: w,
-              container: listBox,
-              onDrop: (items) => {
-                const ids = items.map((it) => it.dataset.entryId ?? '').filter((x) => x !== '')
-                void (async () => {
-                  try {
-                    await api.reorderEntries(cur.id, ids)
-                    await renderAll() // 以服务端为准刷新
-                    toast('已保存条目顺序')
-                  } catch (err) {
-                    toastError(err)
-                    await renderAll() // 失败:恢复服务端原序(spec §6.3 回滚)
-                  }
-                })()
-              },
-            })
-          }
-        }
-      }
-      updateSend()
-    } catch (e) {
-      if (my !== seq) return
-      listBox.innerHTML = ''
-      listBox.appendChild(el('div', 'prp empty-state', '条目加载失败:' + ((e as Error)?.message ?? e)))
-      rows = []
-      updateSend()
-    }
-  }
-
-  function renderEntryWrap(e: Entry, formId: string): HTMLElement {
-    const wrap = el('div', 'prp entry-wrap')
-    wrap.dataset.entryId = e.id
-    const head = el('div', 'prp entry-head')
-    const handle = el('span', 'prp drag-handle', '⋮⋮')
-    handle.title = '拖动排序'
-    const name = el('span', 'prp entry-name', e.name)
-    name.title = e.name
-    const role = el('span', 'prp entry-role', e.role)
-    const segs = segmentCount(e)
-    const grouped = e.kind === 'grouped'
-    const segPid = grouped && segs > 0 ? el('span', 'prp pid', `${segs} 段`) : el('span', 'prp pid-empty')
-    const expanded = state.expandedId === e.id
-    const caretBtn = button('prp text-btn', '', () => { if (grouped) void doToggleExpand(e.id) })
-    caretBtn.textContent = grouped ? (expanded ? '收起' : '展开') : ''
-    if (!grouped) caretBtn.style.visibility = 'hidden' // 普通条目无展开能力,仍占位保持对齐
-    const spacer = el('span', 'prp entry-spacer')
-    const editBtn = button('prp text-btn', '编辑', () => {
-      openEntryEditor({
-        entry: e,
-        onSave: async (input) => {
-          if (!input.name) { toast('条目名称不能为空'); throw new Error('条目名称不能为空') }
-          try {
-            const latest = fresh(e.id)
-            await api.updateEntry(formId, e.id, { ...input, kind: latest?.kind ?? 'plain', blocks: latest?.blocks ?? [] })
-            await renderAll()
-            toast('已保存条目')
-          } catch (err) { toastError(err); throw err }
-        },
-      })
-    })
-    const delBtn = button('prp text-btn danger', '删除', () => {
-      confirmDialog({
-        title: '删除条目',
-        desc: segs > 0 ? `确定要删除条目「${e.name}」及其 ${segs} 个内容块吗?` : `确定要删除条目「${e.name}」吗?`,
-        onOk: () => {
-          void (async () => {
-            try {
-              await api.deleteEntry(formId, e.id)
-              if (state.expandedId === e.id) state = setExpand(state, null)
-              await renderAll()
-              toast('已删除条目')
-            } catch (err) { toastError(err) }
-          })()
-        },
-      })
-    })
-    head.append(handle, name, role, segPid, caretBtn, spacer, editBtn, delBtn)
-    wrap.appendChild(head)
-    if (grouped && expanded) wrap.appendChild(renderDetail(e, formId))
-    return wrap
-  }
-
-  async function doToggleExpand(entryId: string): Promise<void> {
-    state = toggleExpand(state, entryId)
-    await renderAll()
-  }
-
-  /** 展开区:父 text 只读摘要 + 内容块列表 + 添加按钮 */
-  function renderDetail(e: Entry, formId: string): HTMLElement {
-    const detail = el('div', 'prp entry-detail')
-    const main = el('div', 'prp detail-main')
-    const mainLabel = el('label', 'prp detail-label')
-    mainLabel.textContent = '主文本(请在编辑弹窗修改)'
-    const mainText = el('div', 'prp detail-text')
-    const mainVal = e.text.trim() === '' ? '(空)' : e.text
-    mainText.textContent = mainVal
-    mainText.title = mainVal
-    main.append(mainLabel, mainText)
-    const blockLabel = el('label', 'prp detail-label')
-    blockLabel.textContent = `内容块(${e.blocks.length})(随发送拼入主文本之后)`
-    detail.append(main, blockLabel)
-    const blockList = el('div', 'prp block-list')
-    if (e.blocks.length === 0) {
-      blockList.appendChild(el('div', 'prp block-empty', '暂无内容块,点击下方「添加内容块」'))
-    } else {
-      const blockRows: HTMLElement[] = []
-      for (const b of e.blocks) {
-        const br = renderBlockRow(e, formId, b)
-        blockRows.push(br)
-        blockList.appendChild(br)
-      }
-    for (const br of blockRows) {
-      const h = br.querySelector<HTMLElement>('.drag-handle')
-      if (h) {
-        attachDrag({
-          handle: h,
-          item: br,
-          container: blockList,
-          onDrop: (items) => {
-            const ids = items.map((it) => it.dataset.blockId ?? '').filter((x) => x !== '')
-            const latest = fresh(e.id)
-            if (!latest) return
-            const byId = new Map(latest.blocks.map((x) => [x.id, x]))
-            const blocks = ids.map((id) => byId.get(id)).filter((x): x is Block => !!x)
-            void (async () => {
-              try {
-                await api.updateEntry(formId, e.id, { name: latest.name, role: latest.role, text: latest.text, kind: latest.kind, blocks })
-                await renderAll()
-                toast('已保存内容块顺序')
-              } catch (err) {
-                toastError(err)
-                await renderAll() // 失败:恢复服务端原序(spec §6.3 回滚)
-              }
-            })()
-          },
-        })
-      }
-    }
-    }
-    detail.append(blockList)
-    const addBtn = button('prp dashed-btn', '添加内容块', () => void addBlock(e.id, formId))
-    detail.appendChild(addBtn)
-    return detail
-  }
-
-  function renderBlockRow(e: Entry, formId: string, b: Block): HTMLElement {
-    const row = el('div', 'prp block-row')
-    row.dataset.blockId = b.id
-    const handle = el('span', 'prp drag-handle', '⋮⋮')
-    handle.title = '拖动排序'
-    const ta = document.createElement('textarea')
-    ta.className = 'prp block-textarea'
-    ta.value = b.text
-    ta.rows = Math.max(2, Math.min(8, (b.text.match(/\n/g)?.length ?? 0) + 1))
-    const saved = (): void => {
-      const text = ta.value
-      if (text.length > 20000) {
-        ta.value = b.text // 前端护栏:与后端上限一致,超限不提交
-        toast('内容块文本最长 20000 字符')
-        return
-      }
-      if (text === b.text) return
-      void (async () => {
-        const latest = fresh(e.id)
-        if (!latest) return
-        const idx = latest.blocks.findIndex((x) => x.id === b.id)
-        if (idx < 0) return
-        const next = latest.blocks.map((x, i) => (i === idx ? { ...x, text } : x))
+      title: '删除表单', desc: `确定要删除表单「${cur.name}」及其所有条目吗?此操作不可撤销。`, onOk: () => { void (async () => {
         try {
-          await api.updateEntry(formId, e.id, { name: latest.name, role: latest.role, text: latest.text, kind: latest.kind, blocks: next })
-          await renderAll()
-          toast('已保存内容块')
-        } catch (err) {
-          ta.value = b.text // 失败回滚文本
-          toastError(err)
-        }
-      })()
-    }
-    ta.addEventListener('blur', saved)
-    const delBtn = button('prp text-btn danger', '删除', () => {
-      confirmDialog({
-        title: '删除内容块',
-        desc: `确定要删除第 ${(fresh(e.id)?.blocks.findIndex((x) => x.id === b.id) ?? -1) + 1} 个内容块吗?`,
-        onOk: () => {
-          void (async () => {
-            const latest = fresh(e.id)
-            if (!latest) return
-            try {
-              await api.updateEntry(formId, e.id, { name: latest.name, role: latest.role, text: latest.text, kind: latest.kind, blocks: latest.blocks.filter((x) => x.id !== b.id) })
-              await renderAll()
-              toast('已删除内容块')
-            } catch (err) { toastError(err) }
-          })()
-        },
-      })
+          await api.deleteForm(cur.id)
+          state = removeForm(state, cur.id)
+          state = { ...state, dirtyOrder: false, topOrder: [], childOrder: {} }
+          await refreshAll(); renderBar(); renderActions()
+          toast('已删除表单')
+        } catch (e) { toastError(e) }
+      })() },
     })
-    row.append(handle, ta, delBtn)
-    return row
-  }
-
-  async function addBlock(entryId: string, formId: string): Promise<void> {
-    const latest = fresh(entryId)
-    if (!latest) return
-    const bid = 'b_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8)
-    try {
-      await api.updateEntry(formId, entryId, { name: latest.name, role: latest.role, text: latest.text, kind: latest.kind, blocks: [...latest.blocks, { id: bid, text: '' }] })
-      await renderAll()
-      toast('已添加内容块')
-    } catch (err) { toastError(err) }
-  }
-
-  // ---------- 发送(测试版) ----------
-  function updateSend(): void {
-    const cur = current()
-    const hasContent = rows.some((r) => entryContent(r) !== '')
-    sendBtn.disabled = !cur || !hasContent
-  }
-
-  async function doSend(): Promise<void> {
-    if (sending) return // in-flight 保护:防止快速双击并发发送
-    const cur = current()
-    if (!cur) return
-    sending = true
-    sendBtn.disabled = true
-    const count = rows.filter((r) => entryContent(r) !== '').length
-    try {
-      const payload = await api.sendPrompt(cur.id)
-      openResult(`已发送 ${count} 条消息(空内容条目已由服务端过滤)`, payload)
-      setStatus('已发送', 'success')
-    } catch (e) {
-      const msg = (e as Error)?.message || '发送失败'
-      openResult('发送失败', { ok: false, message: msg })
-      setStatus('发送失败', 'error')
-    } finally {
-      sending = false
-      updateSend()
-    }
   }
 
   // ---------- 初始化 ----------
-  void refreshForms()
+  void (async () => {
+    try {
+      state = applyList(state, await api.listForms())
+      renderBar(); renderActions()
+      await refreshAll()
+    } catch (e) { toastError(e) }
+  })()
   return root
 }
