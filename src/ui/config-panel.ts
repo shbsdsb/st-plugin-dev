@@ -6,8 +6,8 @@ import { el, setStatus } from './dom.ts'
 import type { PresetListItem } from './provider.ts'
 
 export interface UiToolsLike {
-  pluginModal(opts: { title?: string; content: string | ((el: HTMLElement) => void); actions?: Array<{ label: string; variant?: string; onClick?: () => void }> }): void
-  modal(opts: { title: string; desc?: string; onOk?: () => void; onCancel?: () => void }): void
+  pluginModal(opts: { title?: string; content: string | ((el: HTMLElement) => void); actions?: Array<{ label: string; variant?: string; onClick?: () => void }>; width?: number; source?: string }): void
+  modal(opts: { title: string; desc?: string; onOk?: () => void; onCancel?: () => void; source?: string }): void
   toast(msg: string, opts?: { icon?: string }): void
 }
 
@@ -202,7 +202,7 @@ export function createConfigPanel(ui: UiToolsLike, api: typeof import('./api.ts'
     if (state.id === null) { setStatusNow('没有可删除的预设', 'error'); return }
     const id = state.id; const name = state.name
     ui.modal({
-      title: '删除预设', desc: `确定删除「${name}」?`,
+      title: '删除预设', desc: `确定删除「${name}」?`, source: 'llm-confirm',
       onOk: () => {
         api.deletePreset(id)
           .then(async () => {

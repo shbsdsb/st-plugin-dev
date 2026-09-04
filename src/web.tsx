@@ -26,6 +26,7 @@ const webPlugin = {
           btn.addEventListener('click', () => {
             tools.pluginModal({
               title: 'LLM 配置',
+              source: 'llm',
               content: (c: HTMLElement) => { c.appendChild(createConfigPanel(tools as UiToolsLike, api)) },
             })
           })
