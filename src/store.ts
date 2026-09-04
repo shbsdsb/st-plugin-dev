@@ -25,6 +25,7 @@ export interface PromptStore {
   createEntry(formId: string, input: EntryInput): Promise<{ entryId: string }>
   updateEntry(formId: string, entryId: string, input: EntryInput): Promise<void>
   deleteEntry(formId: string, entryId: string): Promise<void>
+  reorderEntries(formId: string, ids: string[]): Promise<void>
   getMessages(formId: string): Promise<Message[]>
 }
 
@@ -164,6 +165,16 @@ export function createStore(persist: PersistJsonLike): PromptStore {
       // 先移除顺序引用,后删文件(删失败仅留孤儿文件,无害)
       await persist.write(formFile(formId), f)
       await persist.delete(entryFile(formId, entryId))
+    },
+    async reorderEntries(formId, ids) {
+      const f = await readForm(persist, formId)
+      if (!Array.isArray(ids)) throw new Error('顺序与当前条目不一致')
+      const cur = f.entries
+      if (cur.length !== ids.length) throw new Error('顺序与当前条目不一致')
+      const curSet = new Set(cur)
+      const idSet = new Set(ids)
+      if (idSet.size !== ids.length || ids.some((x) => !curSet.has(x))) throw new Error('顺序与当前条目不一致')
+      await persist.write(formFile(formId), { ...f, entries: [...ids] } satisfies FormFile)
     },
     async getMessages(formId) {
       const f = await readForm(persist, formId)

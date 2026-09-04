@@ -139,4 +139,24 @@ describe('prompt store v2 blocks', () => {
     await expect(store.createEntry(id, { name: 'e', role: 'user', text: '', blocks: [{ text: '缺 id' } as never] }))
       .rejects.toThrow('内容块')
   })
+
+  it('reorderEntries 重排 form.json.entries', async () => {
+    const { id } = await store.createForm('f')
+    const a = await store.createEntry(id, { name: 'a', role: 'user', text: '1' })
+    const b = await store.createEntry(id, { name: 'b', role: 'user', text: '2' })
+    const c = await store.createEntry(id, { name: 'c', role: 'user', text: '3' })
+    await store.reorderEntries(id, [c.entryId, a.entryId, b.entryId])
+    expect((await store.listEntries(id)).map((x) => x.id)).toEqual([c.entryId, a.entryId, b.entryId])
+    expect((await store.getMessages(id)).map((m) => m.content)).toEqual(['3', '1', '2'])
+  })
+
+  it('reorderEntries:非排列/缺元素/多元素/不存在表单', async () => {
+    const { id } = await store.createForm('f')
+    const a = await store.createEntry(id, { name: 'a', role: 'user', text: '1' })
+    const b = await store.createEntry(id, { name: 'b', role: 'user', text: '2' })
+    await expect(store.reorderEntries(id, [a.entryId])).rejects.toThrow('顺序')
+    await expect(store.reorderEntries(id, [a.entryId, a.entryId])).rejects.toThrow('顺序')
+    await expect(store.reorderEntries(id, [a.entryId, 'e_ghost'])).rejects.toThrow('顺序')
+    await expect(store.reorderEntries('f_ghost', [a.entryId, b.entryId])).rejects.toBeInstanceOf(NotFoundError)
+  })
 })
