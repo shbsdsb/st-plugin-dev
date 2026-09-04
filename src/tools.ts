@@ -3,7 +3,7 @@
 // 视觉全部由注入的基础 <style> 控制(简约:白底 + 细边框 + 小圆角,toast/tooltip 深色),JS 只负责结构/交互。
 const STYLE_ID = 'ui-tool-plugin-tools'
 const active: HTMLElement[] = []
-/** 遮罩类节点集合:新开时关闭旧的 */
+/** 遮罩类节点集合:完全不互斥(新开保留旧的任意叠加);同 source 重复打开去重聚焦 */
 const masked: HTMLElement[] = []
 /** 进行中的 interval(progress 等),closeAllTools 时统一清理 */
 const intervals: ReturnType<typeof setInterval>[] = []
@@ -122,12 +122,14 @@ function hide(el: HTMLElement): void {
   }, 300)
 }
 
-/** 遮罩互斥:关闭旧遮罩;except 命中的 kind 保留(嵌套确认框不得关闭承载它的 pluginModal) */
-function closeMasked(except?: string): void {
-  for (const m of [...masked]) {
-    if (except && m.dataset.kind === except) continue
-    hideMask(m)
-  }
+/** 同 source 已开弹窗 → 移除并重挂到 body 末尾置顶(聚焦去重);无 source 或未命中返回 false(照常新开) */
+function focusExisting(source: string | undefined): boolean {
+  if (!source) return false
+  const dup = masked.find((m) => m.dataset.source === source)
+  if (!dup) return false
+  dup.remove()
+  document.body.appendChild(dup)
+  return true
 }
 
 /** 关闭单个遮罩 */
@@ -159,7 +161,7 @@ export interface Tools {
   bottomSheet(opts: { title: string; desc?: string }): void
   topBanner(opts: { title: string; desc?: string }): void
   sideSlide(opts: { title: string; desc?: string }): void
-  modal(opts: { title: string; desc?: string; onOk?: () => void; onCancel?: () => void }): void
+  modal(opts: { title: string; desc?: string; onOk?: () => void; onCancel?: () => void; source?: string }): void
   tooltip(el: HTMLElement, text: string): void
   badge(el: HTMLElement, count?: number): void
   progress(opts: { title: string; onDone?: () => void }): void
@@ -170,6 +172,7 @@ export interface Tools {
     content: string | ((el: HTMLElement) => void) | HTMLElement
     actions?: Array<{ label: string; variant?: 'primary' | 'secondary' | 'danger'; onClick?: () => void }>
     width?: number
+    source?: string
   }): void
 }
 
@@ -199,11 +202,12 @@ export function createTools(): Tools {
       const el = createFloat({ mod: 'fw-slide', icon: '→', title, desc, closable: true })
       show(el)
     },
-    modal({ title, desc, onOk, onCancel }) {
-      closeMasked('pluginModal') // 只互斥同级 modal,保留父 pluginModal
+    modal({ title, desc, onOk, onCancel, source }) {
+      if (focusExisting(source)) return
       const mask = document.createElement('div')
       mask.className = 'fw-mask'
       mask.dataset.kind = 'modal'
+      if (source) mask.dataset.source = source
       const box = document.createElement('div')
       box.className = 'fw-modal'
       const h = document.createElement('h3')
@@ -291,11 +295,12 @@ export function createTools(): Tools {
       el.appendChild(sp)
       show(el, 2800)
     },
-    pluginModal({ title, content, actions, width }) {
-      closeMasked()
+    pluginModal({ title, content, actions, width, source }) {
+      if (focusExisting(source)) return
       const mask = document.createElement('div')
       mask.className = 'fw-mask'
       mask.dataset.kind = 'pluginModal'
+      if (source) mask.dataset.source = source
       const box = document.createElement('div')
       box.className = 'fw-modal'
       box.style.cssText = `width:${width ? width + 'px' : 'min(420px,92vw)'};max-height:82vh;display:flex;flex-direction:column;overflow:hidden;text-align:left;padding:0;`

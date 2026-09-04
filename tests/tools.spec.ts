@@ -159,27 +159,40 @@ describe('createTools 模态与特殊工具', () => {
     vi.useRealTimers()
   })
 
-  it('pluginModal:content 三形态 + actions + 遮罩互斥', () => {
+  it('pluginModal:content 三形态 + actions;不互斥叠加(无 source 每次新开)', () => {
     vi.useFakeTimers()
     tools.pluginModal({ title: '配置', content: '<input id="x">', actions: [{ label: '保存', variant: 'primary' }] })
     tools.pluginModal({ content: (el) => { el.innerHTML = '<b>fn</b>' } })
     tools.pluginModal({ content: document.createElement('div') })
-    // 3 个创建,前两个被互斥关闭(250ms 后移除)
+    // 完全不互斥:3 个创建全部保留叠加(旧的只会在各自关闭时移除)
+    expect(bodyChildren.length).toBe(3)
     vi.advanceTimersByTime(300)
-    expect(bodyChildren.length).toBe(1)
+    expect(bodyChildren.length).toBe(3)
     vi.useRealTimers()
   })
 
-  it('modal 打开不关闭承载它的 pluginModal(嵌套确认)', () => {
+  it('modal 打开不关闭承载它的 pluginModal(嵌套确认,叠加)', () => {
     vi.useFakeTimers()
     tools.pluginModal({ title: '配置', content: (el) => { el.textContent = '面板' } })
-    // harness 纯 DOM stub:按既有风格等价改写 bodyChildren 过滤,断言目标不变
     expect(bodyChildren.filter((c) => c.className.includes('fw-mask')).length).toBe(1)
     tools.modal({ title: '删除', desc: '确认?', onOk: () => {} })
-    // 旧实现 modal() 内 closeMasked() 全杀父 pluginModal:advance 250ms 后被移除,只剩 1 个 mask
-    // 修复后:父 pluginModal 仍在,新确认框叠于其上(共 2 个 mask)
+    // modal 不关闭任何旧弹窗:父 pluginModal 与新确认框都保留(2 个 mask 叠加)
     vi.advanceTimersByTime(300)
     expect(bodyChildren.filter((c) => c.className.includes('fw-mask')).length).toBe(2)
+    vi.useRealTimers()
+  })
+
+  it('同 source 去重聚焦:重复打开不新增,旧弹窗置顶', () => {
+    vi.useFakeTimers()
+    tools.pluginModal({ title: 'a', content: '面板A', source: 'llm' })
+    tools.pluginModal({ title: 'b', content: '面板B', source: 'setting' })
+    expect(bodyChildren.length).toBe(2)
+    tools.pluginModal({ title: 'a2', content: '面板A2', source: 'llm' })
+    expect(bodyChildren.length).toBe(2) // 同 source 未新增
+    expect(bodyChildren[0].className).toContain('fw-mask') // 均为遮罩;旧 llm 面板被移到末尾置顶
+    tools.modal({ title: '确认', desc: '删除?', source: 'llm-confirm' })
+    tools.modal({ title: '确认2', desc: '删除?', source: 'llm-confirm' })
+    expect(bodyChildren.length).toBe(3) // 同 source 确认框去重
     vi.useRealTimers()
   })
 })
