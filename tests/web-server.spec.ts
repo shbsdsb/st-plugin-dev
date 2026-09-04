@@ -193,6 +193,20 @@ describe('WebServerService 分发(exact / 最长 prefix / fallback)', () => {
     }
   })
 
+  it('prefix 注册路径自带尾斜杠时也命中子路径(如 /api/llm/presets/)', async () => {
+    const ws = new WebServerService()
+    ws.register({ kind: 'prefix', path: '/api/llm/presets/', handler: (_req, res) => { res.writeHead(200); res.end('preset') } })
+    ws.registerFallback({ handler: (_req, res) => { res.writeHead(200); res.end('fallback') } })
+    const base = await startOnEphemeralPort(ws)
+    try {
+      expect(await (await fetch(base + '/api/llm/presets/5')).text()).toBe('preset') // 子路径命中
+      expect(await (await fetch(base + '/api/llm/presets')).text()).toBe('preset')   // 去掉尾斜杠的自身前缀也命中(注册含尾斜杠)
+      expect(await (await fetch(base + '/api/llm/presetsX')).text()).toBe('fallback') // 路径段边界不越界
+    } finally {
+      await ws.stop()
+    }
+  })
+
   it('fallback 兜底;disposer 移除后不再命中', async () => {
     const ws = new WebServerService()
     const disposeFallback = ws.registerFallback({ handler: (_req, res) => { res.writeHead(200); res.end('fallback') } })
