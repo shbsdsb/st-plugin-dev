@@ -1,29 +1,12 @@
 export type EntryRole = 'system' | 'user' | 'assistant'
 
-/** 条目类型:plain=普通条目(无内容块);grouped=带内容块的条目 */
-export type EntryKind = 'plain' | 'grouped'
+/** 条目类型:仅父条目显式写 kind:'group';普通/子条目不写 kind */
+export type EntryKind = 'group'
 
-export interface Block {
-  id: string
-  text: string
-}
+export interface PlainEntry { id: string; name: string; role: EntryRole; text: string }
+export interface GroupEntry { id: string; name: string; role: EntryRole; kind: 'group'; children: string[] }
+export interface ChildEntry { id: string; name: string; base: string; text: string }
+export type Entry = PlainEntry | GroupEntry | ChildEntry
 
-export interface Entry {
-  id: string
-  name: string
-  role: EntryRole
-  text: string
-  kind: EntryKind
-  blocks: Block[]
-}
-
-export interface Message {
-  role: EntryRole
-  content: string
-}
-
-export interface FormRow {
-  id: string
-  name: string
-  entryCount: number
-}
+export interface Message { role: EntryRole; content: string }
+export interface FormRow { id: string; name: string; entryCount: number }
