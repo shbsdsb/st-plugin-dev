@@ -28,9 +28,14 @@ export interface PromptStore {
   saveLayout(formId: string, input: LayoutInput): Promise<void>
   readTree(formId: string): Promise<{ top: Entry[]; childrenByParent: Record<string, ChildEntry[]> }>
   addRegisteredEntry(formId: string, input: { regId: string; name: string }): Promise<{ entryId: string }>
+  /** v4.1: 使用表单(active form)读写与注册父探测 */
+  getActiveFormId(): Promise<string | null>
+  setActiveFormId(formId: string): Promise<void>
+  hasRegisteredEntry(formId: string, regId: string): Promise<boolean>
 }
 
 const ROOT = 'data/prompt'
+const ACTIVE_FILE = `${ROOT}/active.json`
 const VALID_ROLES: EntryRole[] = ['system', 'user', 'assistant']
 const MAX_NAME = 50
 /** 注册 id 用作条目文件名,字符集受限防路径穿越 */
@@ -67,6 +72,15 @@ function cleanPerm(v: unknown, current: string[], msg: string): string[] {
 }
 function cleanChildren(v: unknown, currentIds: string[]): string[] {
   return cleanPerm(v, currentIds, '顺序与当前子条目不一致')
+}
+
+/** 读取 active form 文件:缺失/损坏/非 {formId:string} → null(不抛) */
+async function readActiveFile(persist: PersistJsonLike): Promise<string | null> {
+  const raw = await persist.read(ACTIVE_FILE)
+  if (raw && typeof raw === 'object' && typeof (raw as { formId?: unknown }).formId === 'string') {
+    return (raw as { formId: string }).formId
+  }
+  return null
 }
 
 interface FormFile { name: string; entries: string[] }
@@ -190,6 +204,8 @@ export function createStore(persist: PersistJsonLike): PromptStore {
     async deleteForm(id) {
       await readForm(persist, id)
       await persist.delete(dirOf(id))
+      const active = await readActiveFile(persist)
+      if (active === id) await persist.delete(ACTIVE_FILE)
     },
     async createEntry(formId, input) {
       const f = await readForm(persist, formId)
@@ -333,6 +349,19 @@ export function createStore(persist: PersistJsonLike): PromptStore {
       f.entries.push(regId)
       await writeForm(formId, f)
       return { entryId: regId }
+    },
+    async getActiveFormId() {
+      return readActiveFile(persist)
+    },
+    async setActiveFormId(formId) {
+      const clean = typeof formId === 'string' && formId !== '' ? formId : ''
+      if (!clean) throw new Error('表单 id 不能为空')
+      await readForm(persist, clean) // 不存在 → NotFoundError('表单不存在')
+      await persist.write(ACTIVE_FILE, { formId: clean })
+    },
+    async hasRegisteredEntry(formId, regId) {
+      const { top } = await loadFormEntries(persist, formId)
+      return top.some((e) => isGroup(e) && e.id === regId)
     },
   }
 }

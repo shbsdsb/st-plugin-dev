@@ -182,3 +182,36 @@ describe('prompt store v4 扩展', () => {
     await expect(store.addRegisteredEntry(fid, { regId: '../evil', name: 'x' })).rejects.toThrow()
   })
 })
+
+describe('prompt store v4.1 active', () => {
+  it('active 默认 null;setActive 后读取;setActive 校验表单存在', async () => {
+    expect(await store.getActiveFormId()).toBeNull()
+    await expect(store.setActiveFormId('f_nope')).rejects.toThrow('表单不存在')
+    const fid = (await store.createForm('聊天')).id
+    await store.setActiveFormId(fid)
+    expect(await store.getActiveFormId()).toBe(fid)
+  })
+
+  it('deleteForm 删除 active 时联动清空', async () => {
+    const fid = (await store.createForm('聊天')).id
+    await store.setActiveFormId(fid)
+    await store.deleteForm(fid)
+    expect(await store.getActiveFormId()).toBeNull()
+  })
+
+  it('hasRegisteredEntry:注册父存在/不存在/表单不存在', async () => {
+    const fid = (await store.createForm('聊天')).id
+    expect(await store.hasRegisteredEntry(fid, 'history')).toBe(false)
+    await store.addRegisteredEntry(fid, { regId: 'history', name: 'chat-history' })
+    expect(await store.hasRegisteredEntry(fid, 'history')).toBe(true)
+    expect(await store.hasRegisteredEntry(fid, 'input')).toBe(false)
+    await expect(store.hasRegisteredEntry('f_ghost', 'history')).rejects.toThrow('表单不存在')
+  })
+
+  it('active 文件损坏/非 string → 回退 null(不抛)', async () => {
+    await mem.write('data/prompt/active.json', { formId: 42 })
+    expect(await store.getActiveFormId()).toBeNull()
+    await mem.write('data/prompt/active.json', 'garbage')
+    expect(await store.getActiveFormId()).toBeNull()
+  })
+})
