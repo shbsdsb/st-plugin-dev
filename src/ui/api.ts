@@ -17,3 +17,7 @@ export async function sendText(text: string): Promise<string> {
   const r = await apiFetch('/api/chat/send', { method: 'POST', body: JSON.stringify({ text }) })
   return (r.data as { reply: string }).reply
 }
+
+export function getActiveSession(): Promise<string | null> {
+  return apiFetch('/api/session/active').then((r) => r.data as string | null)
+}

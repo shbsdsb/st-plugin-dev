@@ -13,7 +13,9 @@ export function createChatPanel(): HTMLElement {
   injectChatStyle()
   const root = h('div', 'chat-page')
   const head = h('div', 'chat-head')
-  head.append(h('span', '', '对话'), h('span', 'chat-badge', '使用表单 · 含 history/input'))
+  const badge = h('span', 'chat-badge', '多会话')
+  badge.title = '右侧列表切换会话'
+  head.append(h('span', '', '对话'), badge)
   const list = h('div', 'chat-list')
   const empty = h('div', 'msg-empty', '开始第一段对话吧')
   list.appendChild(empty)
@@ -37,6 +39,13 @@ export function createChatPanel(): HTMLElement {
 
   const loadHistory = async () => {
     try {
+      const active = await api.getActiveSession()
+      if (!active) {
+        list.textContent = ''
+        const tip = h('div', 'msg-empty', '点击右侧 ＋ 新建会话')
+        list.appendChild(tip)
+        return
+      }
       const rows = await api.listMessages()
       list.textContent = ''
       if (rows.length === 0) { list.appendChild(empty); return }
@@ -70,6 +79,7 @@ export function createChatPanel(): HTMLElement {
     try {
       const reply = await api.sendText(text)
       appendBubble('ai', reply)
+      window.dispatchEvent(new CustomEvent('st:session-changed', { detail: { reason: 'message-appended' } }))
     } catch (e) {
       appendError((e as Error).message || '发送失败')
     } finally {
@@ -85,5 +95,6 @@ export function createChatPanel(): HTMLElement {
   const composer = h('div', 'chat-composer')
   composer.append(ta, sendBtn)
   root.append(head, list, composer)
+  ;(root as HTMLElement & { reload?(): void }).reload = loadHistory
   return root
 }
