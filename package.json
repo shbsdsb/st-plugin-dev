@@ -1,0 +1,26 @@
+{
+  "name": "logger-plugin",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "观测 cordis 运行环境内所有插件动作(生命周期/服务/事件),终端 + 按天文件输出",
+  "main": "lib/index.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "cordis": "file:../../agent_plugin_feat/vendor/cordis"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "^5.7.3",
+    "vitest": "^4.1.11"
+  },
+  "st": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  }
+}

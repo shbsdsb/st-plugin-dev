@@ -1,0 +1,4 @@
+# logger-plugin bundle patch(insert 语法声明条目)
+- insert:
+  - name: logger-plugin
+    id: logger-plugin
