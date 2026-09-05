@@ -119,7 +119,7 @@ export function Layout(props: {
 
   const btn = (icon: React.ReactElement, onClick: () => void, title: string, extra?: Record<string, unknown>): React.ReactElement =>
     React.createElement('button',
-      { className: 'st-slot-btn', onClick, title, style: { width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0, cursor: 'pointer', background: 'transparent', border: '1px solid #ccc', borderRadius: '50%' }, ...extra },
+      { className: 'st-slot-btn', onClick, title, style: { width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0, cursor: 'pointer', background: 'transparent', border: '1px solid var(--ui-border-strong, #ccc)', borderRadius: '50%' }, ...extra },
       icon)
 
   const sidebar = (side: 'left' | 'right', w: number, collapsed: boolean, setCollapsed: (v: boolean) => void) => {
@@ -131,7 +131,7 @@ export function Layout(props: {
           React.createElement('div', { ref: slotRefCollapsed('sidebar-left'), style: { display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 } }))
       }
       return React.createElement(React.Fragment, null,
-        React.createElement('div', { 'data-slot': 'sidebar-left', style: { width: w, flexShrink: 0, overflow: 'auto', display: 'flex', flexDirection: 'column', borderRight: '1px solid #ccc' } },
+        React.createElement('div', { 'data-slot': 'sidebar-left', style: { width: w, flexShrink: 0, overflow: 'auto', display: 'flex', flexDirection: 'column', borderRight: '1px solid var(--ui-border, #ccc)' } },
           React.createElement('div', { style: { padding: '6px 8px', display: 'flex', justifyContent: 'flex-end' } },
             btn(React.createElement(IconDotChevron, { dir: 'left' }), () => setCollapsed(true), '收起侧边栏')),
           React.createElement('div', { ref: slotRef('sidebar-left'), style: { flex: 1, padding: 8 } })),
@@ -140,7 +140,7 @@ export function Layout(props: {
     if (collapsed) return null
     return React.createElement(React.Fragment, null,
       React.createElement('div', { className: 'st-drag-handle', onMouseDown: (e) => startDrag(e, side), style: { width: 4, cursor: 'col-resize', flexShrink: 0 } }),
-      React.createElement('div', { 'data-slot': 'sidebar-right', style: { width: w, flexShrink: 0, overflow: 'auto', borderLeft: '1px solid #ccc' } },
+      React.createElement('div', { 'data-slot': 'sidebar-right', style: { width: w, flexShrink: 0, overflow: 'auto', borderLeft: '1px solid var(--ui-border, #ccc)' } },
         React.createElement('div', { style: { padding: '6px 8px', display: 'flex', justifyContent: 'flex-start' } },
           btn(React.createElement(IconDotPlus, null), () => setCollapsed(true), '收起侧边栏')),
         React.createElement('div', { ref: slotRef('sidebar-right'), style: { padding: 8 } })))
@@ -159,13 +159,13 @@ export function Layout(props: {
   const navChildren = React.createElement('div', { ref: slotRef('nav'), style: { flex: 1 } })
 
   return React.createElement('div', { style: { display: 'flex', flexDirection: 'column', height: '100vh', fontFamily: 'system-ui', margin: 0, overflow: 'hidden' } },
-    React.createElement('div', { 'data-slot': 'nav', style: { height: NAV_H, display: 'flex', alignItems: 'center', padding: '0 8px', flexShrink: 0, borderBottom: '1px solid #ccc' } },
+    React.createElement('div', { 'data-slot': 'nav', style: { height: NAV_H, display: 'flex', alignItems: 'center', padding: '0 8px', flexShrink: 0, borderBottom: '1px solid var(--ui-border, #ccc)' } },
       navChildren),
     desktopBody,
     overlayVisible && React.createElement('div', {
       'data-slot': 'overlay',
       onMouseDown: startOverlayDrag,
-      style: { position: 'fixed', left: overlayPos.x, top: overlayPos.y, width: 240, height: 160, border: '1px solid #999', borderRadius: 6, cursor: 'move', zIndex: 1000, display: 'flex', flexDirection: 'column' },
+      style: { position: 'fixed', left: overlayPos.x, top: overlayPos.y, width: 240, height: 160, border: '1px solid var(--ui-border-strong, #999)', borderRadius: 6, cursor: 'move', zIndex: 1000, display: 'flex', flexDirection: 'column' },
     },
       React.createElement('div', { style: { display: 'flex', justifyContent: 'flex-end', padding: '2px 4px' } },
         React.createElement('button', { onClick: (e) => { e.stopPropagation(); setOverlayVisible(false) }, style: { border: 'none', background: 'none', cursor: 'pointer', fontSize: 12 } }, '✕')),
