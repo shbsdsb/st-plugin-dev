@@ -1,0 +1,4 @@
+# multi-session-plugin bundle patch(insert 语法声明条目)
+- insert:
+  - name: multi-session-plugin
+    id: multi-session-plugin
