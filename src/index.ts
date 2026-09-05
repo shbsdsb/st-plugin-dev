@@ -1,6 +1,8 @@
 import { Context } from 'cordis'
-import { registerRoutes, type LlmPromptLike } from './routes.ts'
-import { createStore, type PersistJsonLike } from './store.ts'
+import { registerRoutes } from './routes.ts'
+import { createStore, type PromptStore } from './store.ts'
+import { createRegisterTable, type PromptRegisterService } from './register.ts'
+import { buildMessages } from './chain.ts'
 import type { Message } from './types.ts'
 
 declare module 'cordis' {
@@ -8,8 +10,9 @@ declare module 'cordis' {
     webServer: {
       register(o: { kind: 'exact' | 'prefix'; path: string; handler: (req: import('node:http').IncomingMessage, res: import('node:http').ServerResponse) => void | Promise<void> }): () => void
     }
-    persistJson: PersistJsonLike
-    llmPrompt: LlmPromptLike & { send(messages: Message[]): Promise<unknown> }
+    persistJson: { read(p: string): Promise<unknown>; write(p: string, d: unknown): Promise<void>; list(p: string): Promise<string[]>; delete(p: string): Promise<void> }
+    promptRegister: PromptRegisterService
+    promptChaining: { build(formId: string): Promise<Message[]> }
   }
 }
 
@@ -22,10 +25,23 @@ const EmptyConfigSchema = {
 export function apply(ctx: Context, _config: Record<string, unknown>) {
   ctx.effect(async () => {
     let disposeRoutes: (() => void) | null = null
+    let disposeReg: (() => void) | null = null
+    let disposeChain: (() => void) | null = null
     try {
-      const store = createStore(ctx.persistJson)
-      disposeRoutes = registerRoutes(ctx.webServer.register.bind(ctx.webServer), { store, llm: ctx.llmPrompt })
-      return () => { disposeRoutes?.(); disposeRoutes = null }
+      const store: PromptStore = createStore(ctx.persistJson)
+      const registry = createRegisterTable()
+      const chaining = { build: (formId: string) => buildMessages(formId, { reader: store, registry }) }
+      disposeReg = ctx.provide('promptRegister', registry)
+      disposeChain = ctx.provide('promptChaining', chaining)
+      disposeRoutes = registerRoutes(ctx.webServer.register.bind(ctx.webServer), { store, registry, chaining })
+      return () => {
+        disposeRoutes?.()
+        disposeRoutes = null
+        disposeReg?.()
+        disposeReg = null
+        disposeChain?.()
+        disposeChain = null
+      }
     } catch (e) {
       console.error('[prompt-plugin] init error:', (e as Error)?.message ?? e)
       return () => {}
@@ -33,8 +49,8 @@ export function apply(ctx: Context, _config: Record<string, unknown>) {
   })
 }
 
-apply.inject = ['webServer', 'persistJson', 'llmPrompt']
-apply.provide = [] as string[]
+apply.inject = ['webServer', 'persistJson']   // v4:不再依赖 llmPrompt(只拼不发,发送由调用方决定)
+apply.provide = ['promptChaining', 'promptRegister']
 apply.Config = EmptyConfigSchema
 
 export default apply

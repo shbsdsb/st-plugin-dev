@@ -29,9 +29,9 @@ export async function buildMessages(formId: string, deps: { reader: TreeReader; 
   const { top, childrenByParent } = await reader.readTree(formId)
   const out: Message[] = []
   for (const e of top) {
-    if (e.enabled === false) continue            // 顶层开关;子条无开关跟随父
     if (isGroup(e)) {
       const g = e as GroupEntry
+      if (g.enabled === false) continue          // 顶层开关;子条无开关跟随父
       const children = childrenByParent[g.id] ?? []
       const hasPh = children.some(isPlaceholder)
       const reg = hasPh ? registry.get(g.id) : undefined
@@ -51,9 +51,11 @@ export async function buildMessages(formId: string, deps: { reader: TreeReader; 
       if (content === '') continue
       out.push({ role: g.role, content })
     } else if (isPlain(e)) {
-      const content = seg((e as PlainEntry).text)
+      const p = e as PlainEntry
+      if (p.enabled === false) continue          // 顶层开关
+      const content = seg(p.text)
       if (content === '') continue
-      out.push({ role: e.role, content })
+      out.push({ role: p.role, content })
     }
     // 顶层游离子条(异常数据)跳过
   }

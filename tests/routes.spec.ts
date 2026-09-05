@@ -2,7 +2,8 @@ import { describe, it, expect } from 'vitest'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { registerRoutes } from '../src/routes.ts'
 import { createStore, type PersistJsonLike, type PromptStore } from '../src/store.ts'
-import type { Message } from '../src/types.ts'
+import { createRegisterTable } from '../src/register.ts'
+import { buildMessages } from '../src/chain.ts'
 
 function memPersist(): PersistJsonLike {
   const map = new Map<string, unknown>()
@@ -25,10 +26,12 @@ function memPersist(): PersistJsonLike {
   }
 }
 
-function capture(dep: { llm: { send(m: Message[]): Promise<unknown> } }) {
+function capture() {
   const store: PromptStore = createStore(memPersist())
+  const registry = createRegisterTable()
+  const chaining = { build: (formId: string) => buildMessages(formId, { reader: store, registry }) }
   const handlers = new Map<string, (req: IncomingMessage, res: ServerResponse) => void | Promise<void>>()
-  const dispose = registerRoutes((o) => { handlers.set(o.path, o.handler); return () => handlers.delete(o.path) }, { store, llm: dep.llm })
+  const dispose = registerRoutes((o) => { handlers.set(o.path, o.handler); return () => handlers.delete(o.path) }, { store, registry, chaining })
   const call = async (path: string, body?: unknown, method = 'GET') => {
     const h = handlers.get('/api/prompt/')!
     const req = {
@@ -43,12 +46,12 @@ function capture(dep: { llm: { send(m: Message[]): Promise<unknown> } }) {
     await h(req, res)
     return { status, json: JSON.parse(out || '{}') }
   }
-  return { store, call, dispose }
+  return { store, registry, call, dispose }
 }
 
 describe('prompt routes v3', () => {
   it('表单 CRUD', async () => {
-    const c = capture({ llm: { send: async () => ({}) } })
+    const c = capture()
     const fid: string = (await c.call('/api/prompt/forms', { name: '客服' }, 'POST')).json.data.id
     expect((await c.call('/api/prompt/forms')).json.data).toEqual([{ id: fid, name: '客服', entryCount: 0 }])
     expect((await c.call(`/api/prompt/forms/${fid}`, { name: '客服2' }, 'PUT')).json.ok).toBe(true)
@@ -57,7 +60,7 @@ describe('prompt routes v3', () => {
   })
 
   it('三类条目创建与平铺返回;非法 → 400', async () => {
-    const c = capture({ llm: { send: async () => ({}) } })
+    const c = capture()
     const fid: string = (await c.call('/api/prompt/forms', { name: 'f' }, 'POST')).json.data.id
     const plain = await c.call(`/api/prompt/forms/${fid}/entries`, { name: '普', role: 'user', text: 't' }, 'POST')
     expect(plain.status).toBe(200)
@@ -77,7 +80,7 @@ describe('prompt routes v3', () => {
   })
 
   it('update 改 base → 400;delete 父级联;order 保存全层级', async () => {
-    const c = capture({ llm: { send: async () => ({}) } })
+    const c = capture()
     const fid: string = (await c.call('/api/prompt/forms', { name: 'f' }, 'POST')).json.data.id
     const g = await c.call(`/api/prompt/forms/${fid}/entries`, { name: '父', role: 'user', kind: 'group' }, 'POST')
     const gid: string = g.json.data.entryId
@@ -92,20 +95,42 @@ describe('prompt routes v3', () => {
     expect((await c.call(`/api/prompt/forms/${fid}/entries`)).json.data).toEqual([])
     c.dispose()
   })
+})
 
-  it('send:普通独立 + 父聚合', async () => {
-    const sent: Message[][] = []
-    const c = capture({ llm: { send: async (m: Message[]) => { sent.push(m); return {} } } })
-    const fid: string = (await c.call('/api/prompt/forms', { name: 'f' }, 'POST')).json.data.id
-    await c.call(`/api/prompt/forms/${fid}/entries`, { name: '系统', role: 'system', text: 'sys' }, 'POST')
-    const g = await c.call(`/api/prompt/forms/${fid}/entries`, { name: '父', role: 'user', kind: 'group' }, 'POST')
-    const gid: string = g.json.data.entryId
-    await c.call(`/api/prompt/forms/${fid}/entries`, { name: 'c1', base: gid, text: '一' }, 'POST')
-    await c.call(`/api/prompt/forms/${fid}/entries`, { name: 'c2', base: gid, text: '二' }, 'POST')
-    const r = await c.call(`/api/prompt/forms/${fid}/send`, undefined, 'POST')
-    expect(r.status).toBe(200)
-    expect(sent).toEqual([[{ role: 'system', content: 'sys' }, { role: 'user', content: '一\n\n二' }]])
-    expect((await c.call(`/api/prompt/forms/f_ghost/send`, undefined, 'POST')).status).toBe(404)
+describe('prompt routes v4', () => {
+  it('registered:列出注册注入;registered-entry:添加父+占位符;重复/未知 400', async () => {
+    const c = capture()
+    const fid: string = (await c.call('/api/prompt/forms', { name: '客服' }, 'POST')).json.data.id
+    c.registry.register({ id: 'kb', name: '知识库', fn: () => 'x' })
+    expect((await c.call('/api/prompt/registered')).json.data).toEqual([{ id: 'kb', name: '知识库' }])
+    const r1 = await c.call(`/api/prompt/forms/${fid}/registered-entry`, { id: 'kb' }, 'POST')
+    expect(r1.json.ok).toBe(true)
+    expect((await c.call(`/api/prompt/forms/${fid}/registered-entry`, { id: 'kb' }, 'POST')).json.ok).toBe(false)
+    expect((await c.call(`/api/prompt/forms/${fid}/registered-entry`, { id: 'nope' }, 'POST')).json.ok).toBe(false)
+    const rows = await c.call(`/api/prompt/forms/${fid}/entries`)
+    expect(rows.json.data).toHaveLength(2)
+    c.dispose()
+  })
+
+  it('preview:拼接含动态注入;无 llm 依赖;空表单 400', async () => {
+    const c = capture()
+    const fid: string = (await c.call('/api/prompt/forms', { name: '客服' }, 'POST')).json.data.id
+    const empty = await c.call(`/api/prompt/forms/${fid}/preview`, {}, 'POST')
+    expect(empty.json.ok).toBe(false)
+    c.registry.register({ id: 'kb', name: '知识库', fn: () => '知识内容' })
+    await c.call(`/api/prompt/forms/${fid}/registered-entry`, { id: 'kb' }, 'POST')
+    const pv = await c.call(`/api/prompt/forms/${fid}/preview`, {}, 'POST')
+    expect(pv.json.ok).toBe(true)
+    expect(pv.json.data.messages).toEqual([{ role: 'user', content: '知识内容' }])
+    c.dispose()
+  })
+
+  it('/send 已移除 → 404', async () => {
+    const c = capture()
+    const fid: string = (await c.call('/api/prompt/forms', { name: '客服' }, 'POST')).json.data.id
+    const r = await c.call(`/api/prompt/forms/${fid}/send`, {}, 'POST')
+    expect(r.json.ok).toBe(false)
+    expect(r.status).toBe(404)
     c.dispose()
   })
 })
