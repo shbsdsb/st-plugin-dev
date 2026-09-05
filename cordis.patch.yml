@@ -1,0 +1,4 @@
+# ui-polish bundle patch(insert 语法声明条目)
+- insert:
+  - name: ui-polish
+    id: ui-polish

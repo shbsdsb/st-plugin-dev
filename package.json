@@ -1,0 +1,25 @@
+{
+  "name": "ui-polish",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "主题接管插件:内置 UI-token 默认层(CSS variables)+ $ST_HOME/data/frontend/<name>/{html,css,js} 持久化定制,启动自动注入",
+  "main": "lib/index.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json && node ../../agent_plugin_feat/bootstrap/src/cli/index.ts web-build --cwd .",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "cordis": "file:../../agent_plugin_feat/vendor/cordis"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "^5.7.3",
+    "vitest": "^4.1.11"
+  },
+  "st": {
+    "bundle": { "patch": "./cordis.patch.yml" },
+    "client": { "kind": "web", "path": "lib/index.cjs", "immed": true, "inject": [] }
+  }
+}
