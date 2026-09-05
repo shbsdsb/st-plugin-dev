@@ -56,6 +56,16 @@ export function createMultiStore(db: DatabaseSync): MultiStore {
   )`)
 
   const now = (): string => new Date().toISOString()
+  /** 严格大于 prev 的时间戳(防同毫秒竞态,保证 updated_at 单调) */
+  function bump(prev: string): string {
+    let t = new Date().toISOString()
+    if (t <= prev) {
+      const d = new Date(prev)
+      d.setMilliseconds(d.getMilliseconds() + 1)
+      t = d.toISOString()
+    }
+    return t
+  }
 
   function getActiveId(): string | null {
     const row = db.prepare("SELECT v FROM meta WHERE k = 'active_session_id'").get()
@@ -117,9 +127,9 @@ export function createMultiStore(db: DatabaseSync): MultiStore {
       const c = seg(content)
       if (!c) throw new Error('消息内容不能为空')
       if (!['system', 'user', 'assistant'].includes(role)) throw new Error('非法消息角色')
-      const t = now()
-      db.prepare('INSERT INTO messages (session_id, role, content, created_at) VALUES (?, ?, ?, ?)').run(sessionId, role, c, t)
-      const row = db.prepare('SELECT title FROM sessions WHERE id = ?').get(sessionId) as { title: string }
+      const row = db.prepare('SELECT title, updated_at FROM sessions WHERE id = ?').get(sessionId) as { title: string; updated_at: string }
+      const t = bump(row.updated_at)
+      db.prepare('INSERT INTO messages (session_id, role, content, created_at) VALUES (?, ?, ?, ?)').run(sessionId, role, c, now())
       if (role === 'user' && row.title === '新会话') {
         const title = makeTitle(c)
         if (title !== '') db.prepare('UPDATE sessions SET title = ?, updated_at = ? WHERE id = ?').run(title, t, sessionId)
