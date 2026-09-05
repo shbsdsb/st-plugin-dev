@@ -30,7 +30,7 @@
       "kind": "web",
       "path": "lib/index.cjs",
       "immed": true,
-      "inject": ["ui-tool-plugin", "st-ui-slots"]
+      "inject": ["ui-polish", "ui-tool-plugin", "st-ui-slots"]
     }
   }
 }

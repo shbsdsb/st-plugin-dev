@@ -63,38 +63,38 @@ function ensureStyle(): void {
   const style = document.createElement('style')
   style.id = STYLE_ID
   style.textContent = `
-.st-setting-btn{display:flex;align-items:center;gap:8px;width:100%;justify-content:flex-start;padding:6px 10px;border:none;background:none;cursor:pointer;color:#475569;font-size:13px;border-radius:8px;}
-.st-setting-btn:hover{background:rgba(124,109,246,.08);}
+.st-setting-btn{display:flex;align-items:center;gap:8px;width:100%;justify-content:flex-start;padding:6px 10px;border:none;background:none;cursor:pointer;color:var(--ui-text,#444444);font-size:13px;border-radius:8px;}
+.st-setting-btn:hover{background:var(--ui-accent-soft,#f0f0f0);}
 .st-setting-btn .ps-ic{font-size:15px;}
-.st-setting-btn.ps-compact{justify-content:center;padding:6px 0;width:32px;height:32px;border-radius:50%;background:rgba(124,109,246,.14);color:#7c6df6;font-size:15px;}
-.ps-dialog{height:62vh;min-height:360px;display:flex;flex-direction:column;font-size:13px;color:#334155;line-height:1.7;}
-.ps-hint{font-size:11px;color:#94a3b8;margin-bottom:8px;}
+.st-setting-btn.ps-compact{justify-content:center;padding:6px 0;width:32px;height:32px;border-radius:50%;background:var(--ui-accent-soft,#f0f0f0);color:var(--ui-accent,#333333);font-size:15px;}
+.ps-dialog{height:62vh;min-height:360px;display:flex;flex-direction:column;font-size:13px;color:var(--ui-text,#444444);line-height:1.7;}
+.ps-hint{font-size:11px;color:var(--ui-text-muted,#888888);margin-bottom:8px;}
 .ps-list{position:relative;flex:1;min-height:0;}
-.ps-entry{position:absolute;left:0;right:0;border:1px solid rgba(148,163,184,.35);border-radius:12px;background:rgba(255,255,255,.85);will-change:top;transition:top .3s cubic-bezier(.22,.61,.36,1),box-shadow .2s ease,border-color .2s ease;}
+.ps-entry{position:absolute;left:0;right:0;border:1px solid var(--ui-border,#e0e0e0);border-radius:12px;background:var(--ui-surface,#ffffff);will-change:top;transition:top .3s cubic-bezier(.22,.61,.36,1),box-shadow .2s ease,border-color .2s ease;}
 .ps-head{display:flex;align-items:center;gap:8px;height:46px;padding:0 12px;cursor:grab;user-select:none;}
-.ps-drag{color:#cbd5e1;cursor:grab;font-size:14px;}
-.ps-name{flex:1;font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#334155;}
-.ps-id{font-size:11px;color:#aaa;font-family:monospace;margin-left:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:160px;}
-.ps-caret{border:none;background:none;cursor:pointer;color:#64748b;font-size:13px;}
-.ps-entry.ps-no-config{background:#fafafa;border-color:#ececec;}
+.ps-drag{color:var(--ui-text-muted,#888888);cursor:grab;font-size:14px;}
+.ps-name{flex:1;font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--ui-text,#444444);}
+.ps-id{font-size:11px;color:var(--ui-text-muted,#888888);font-family:monospace;margin-left:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:160px;}
+.ps-caret{border:none;background:none;cursor:pointer;color:var(--ui-text-muted,#888888);font-size:13px;}
+.ps-entry.ps-no-config{background:var(--ui-surface,#ffffff);border-color:var(--ui-border,#e0e0e0);}
 .ps-entry.ps-no-config .ps-name,
-.ps-entry.ps-no-config .ps-id{color:#bbb;}
+.ps-entry.ps-no-config .ps-id{color:var(--ui-text-muted,#888888);}
 .ps-entry.ps-no-config .ps-caret{display:none;}
-.ps-entry.ps-no-config .ps-drag{color:#e5e7eb;}
-.ps-entry.ps-no-config:hover{cursor:default;box-shadow:none;border-color:#ececec;}
-.ps-detail{border-top:1px dashed rgba(148,163,184,.4);padding:12px;font-size:12px;display:none;background:rgba(248,250,252,.6);border-radius:0 0 12px 12px;}
+.ps-entry.ps-no-config .ps-drag{color:var(--ui-text-muted,#888888);}
+.ps-entry.ps-no-config:hover{cursor:default;box-shadow:none;border-color:var(--ui-border,#e0e0e0);}
+.ps-detail{border-top:1px dashed var(--ui-border,#e0e0e0);padding:12px;font-size:12px;display:none;background:var(--ui-surface,#ffffff);border-radius:0 0 12px 12px;}
 .ps-entry.ps-open .ps-detail{display:block;}
-.ps-entry.ps-dragging{z-index:100;box-shadow:0 12px 40px rgba(31,38,135,.25);border-color:rgba(124,109,246,.6);cursor:grabbing;transition:box-shadow .2s ease,border-color .2s ease;}
-.ps-entry.ps-dragging .ps-drag{color:#7c6df6;}
-.ps-drop-indicator{position:absolute;left:8px;right:8px;height:3px;border-radius:3px;background:#7c6df6;opacity:0;transition:opacity .15s ease;pointer-events:none;box-shadow:0 0 10px rgba(124,109,246,.5);z-index:101;}
+.ps-entry.ps-dragging{z-index:100;box-shadow:0 12px 40px rgba(31,38,135,.25);border-color:var(--ui-accent,#333333);cursor:grabbing;transition:box-shadow .2s ease,border-color .2s ease;}
+.ps-entry.ps-dragging .ps-drag{color:var(--ui-accent,#333333);}
+.ps-drop-indicator{position:absolute;left:8px;right:8px;height:3px;border-radius:3px;background:var(--ui-accent,#333333);opacity:0;transition:opacity .15s ease;pointer-events:none;box-shadow:var(--ui-accent-ring,rgba(51,51,51,0.15));z-index:101;}
 .ps-drop-indicator.ps-visible{opacity:1;}
 .ps-field{display:flex;align-items:center;gap:8px;margin-bottom:8px;}
-.ps-field label{width:110px;flex-shrink:0;color:#475569;}
-.ps-field input[type=text],.ps-field input[type=number]{flex:1;padding:6px 8px;border:1px solid rgba(148,163,184,.5);border-radius:8px;font-size:13px;color:#1f2d3d;}
-.ps-field textarea{flex:1;min-height:80px;padding:6px 8px;border:1px solid rgba(148,163,184,.5);border-radius:8px;font-family:monospace;font-size:12px;color:#1f2d3d;}
-.ps-none{color:#94a3b8;}
-.ps-error{color:#dc2626;font-size:13px;padding:16px;}
-.ps-loading{color:#94a3b8;font-size:13px;padding:16px;}
+.ps-field label{width:110px;flex-shrink:0;color:var(--ui-text,#444444);}
+.ps-field input[type=text],.ps-field input[type=number]{flex:1;padding:6px 8px;border:1px solid var(--ui-border,#e0e0e0);border-radius:8px;font-size:13px;color:var(--ui-text,#444444);}
+.ps-field textarea{flex:1;min-height:80px;padding:6px 8px;border:1px solid var(--ui-border,#e0e0e0);border-radius:8px;font-family:monospace;font-size:12px;color:var(--ui-text,#444444);}
+.ps-none{color:var(--ui-text-muted,#888888);}
+.ps-error{color:var(--ui-danger,#d9534f);font-size:13px;padding:16px;}
+.ps-loading{color:var(--ui-text-muted,#888888);font-size:13px;padding:16px;}
 `
   document.head.appendChild(style)
 }
@@ -362,19 +362,19 @@ function stringListField(onChange: (v: unknown) => void, initial: string[]): HTM
       const input = document.createElement('input')
       input.type = 'text'
       input.value = item
-      input.style.cssText = 'flex:1;padding:5px 8px;border:1px solid rgba(148,163,184,.5);border-radius:8px;font-size:12px;color:#1f2d3d;min-width:0;'
+      input.style.cssText = 'flex:1;padding:5px 8px;border:1px solid var(--ui-border,#e0e0e0);border-radius:8px;font-size:12px;color:var(--ui-text,#444444);min-width:0;'
       input.addEventListener('input', () => { initial[i] = input.value; onChange([...initial]) })
       const del = document.createElement('button')
       del.textContent = '🗑'
       del.title = '删除'
-      del.style.cssText = 'width:26px;height:26px;border:none;background:none;cursor:pointer;font-size:13px;color:#dc2626;flex-shrink:0;display:flex;align-items:center;justify-content:center;'
+      del.style.cssText = 'width:26px;height:26px;border:none;background:none;cursor:pointer;font-size:13px;color:var(--ui-danger,#d9534f);flex-shrink:0;display:flex;align-items:center;justify-content:center;'
       del.addEventListener('click', () => { initial.splice(i, 1); onChange([...initial]); render() })
       row.append(input, del)
       container.appendChild(row)
     })
     const add = document.createElement('button')
     add.textContent = '＋ 新建'
-    add.style.cssText = 'align-self:flex-start;border:1px dashed rgba(148,163,184,.5);background:none;border-radius:8px;padding:4px 10px;cursor:pointer;font-size:12px;color:#7c6df6;'
+    add.style.cssText = 'align-self:flex-start;border:1px dashed var(--ui-border,#e0e0e0);background:none;border-radius:8px;padding:4px 10px;cursor:pointer;font-size:12px;color:var(--ui-accent,#333333);'
     add.addEventListener('click', () => { initial.push(''); onChange([...initial]); render() })
     container.appendChild(add)
   }
