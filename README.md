@@ -16,10 +16,13 @@
 | --ui-text-muted | #888888 | 次要文本/图标 |
 | --ui-accent | #333333 | 强调色 |
 | --ui-accent-soft | #f0f0f0 | 强调弱底 |
+| --ui-accent-ring | rgba(51,51,51,0.15) | 焦点外环 |
 | --ui-on-accent | #ffffff | 强调色上文字 |
 | --ui-danger | #d9534f | 危险 |
+| --ui-danger-soft | #fef3f2 | 危险弱底 |
 | --ui-warning | #e6a23c | 警告 |
 | --ui-success | #52c41a | 成功 |
+| --ui-success-soft | #f6ffed | 成功弱底 |
 | --ui-overlay | rgba(0, 0, 0, 0.28) | 遮罩 |
 | --ui-radius-s | 4px | 小圆角 |
 | --ui-radius-m | 6px | 大圆角 |
