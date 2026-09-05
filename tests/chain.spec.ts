@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { buildMessages, buildWithActive } from '../src/chain.ts'
+import { buildMessages, buildWithActive, buildPreview } from '../src/chain.ts'
 import { createRegisterTable } from '../src/register.ts'
 import { createStore } from '../src/store.ts'
 import type { ChildEntry, Entry, GroupEntry, PlainEntry } from '../src/types.ts'
@@ -121,5 +121,38 @@ describe('prompt chain v4.1 active', () => {
     // 直写悬挂 active(模拟数据不一致):active 指向已不存在的表单
     await mem.write('data/prompt/active.json', { formId: fid })
     await expect(buildWithActive(s, reg)).rejects.toThrow('使用表单不存在或已删除,请重新选择')
+  })
+})
+
+// —— v5 预览:静态拼接,注册占位 JSON 化,不调用 fn ——
+describe('prompt chain v5 preview', () => {
+  const vplain = (p: Partial<PlainEntry> & { id: string }): PlainEntry => ({ name: p.name ?? 'p', role: 'user', text: '', ...p })
+  const vgroup = (g: Partial<GroupEntry> & { id: string }): GroupEntry => ({ name: g.name ?? 'g', role: 'user', kind: 'group', children: [], ...g })
+
+  it('占位符子条产 JSON 占位段,普通子条照常;父消息聚合', async () => {
+    const top: Entry[] = [vgroup({ id: 'history', name: 'chat-history', role: 'user', children: ['ph'] })]
+    const rows = await buildPreview('f', reader(top, {
+      history: [
+        ph('ph', 'history', 'history', 'chat-history'),
+        { id: 'c2', name: 'c2', base: 'history', text: '补充说明' },
+      ],
+    }))
+    expect(rows).toEqual([{ role: 'user', content: '{"history":"chat-history(发送时注入)"}\n\n补充说明' }])
+  })
+
+  it('注册插件缺失(registry 不存在)也能拼,不抛错', async () => {
+    const top: Entry[] = [vgroup({ id: 'input', name: 'user-input', role: 'user', children: ['ph'] })]
+    const rows = await buildPreview('f', reader(top, { input: [ph('ph', 'input', 'input', 'user-input')] }))
+    expect(rows).toEqual([{ role: 'user', content: '{"input":"user-input(发送时注入)"}' }])
+  })
+
+  it('顶层 enabled=false 整组跳过;普通条目照常;空文本跳过', async () => {
+    const top: Entry[] = [
+      vgroup({ id: 'sys', name: '系统', role: 'system', enabled: false, children: [] }),
+      vplain({ id: 'p', name: '系统', role: 'system', text: '你是助手' }),
+      vplain({ id: 'b', name: '', role: 'user', text: '   ' }),
+    ]
+    const rows = await buildPreview('f', reader(top, {}))
+    expect(rows).toEqual([{ role: 'system', content: '你是助手' }])
   })
 })

@@ -78,3 +78,36 @@ export async function buildWithActive(
     throw e
   }
 }
+
+/** v5: 预览静态拼接 —— 注册占位 JSON 化(不依赖 registry、不调用注入 fn);发送仍走 buildMessages */
+export async function buildPreview(formId: string, reader: TreeReader): Promise<Message[]> {
+  const { top, childrenByParent } = await reader.readTree(formId)
+  const out: Message[] = []
+  for (const e of top) {
+    if (isGroup(e)) {
+      const g = e as GroupEntry
+      if (g.enabled === false) continue          // 顶层开关;子条无开关跟随父
+      const children = childrenByParent[g.id] ?? []
+      const parts: string[] = []
+      for (const c of children) {
+        if (isPlaceholder(c)) {
+          parts.push(JSON.stringify({ [g.id]: `${g.name}(发送时注入)` }))
+        } else {
+          const t = seg(c.text)
+          if (t) parts.push(t)
+        }
+      }
+      const content = parts.join('\n\n')
+      if (content === '') continue
+      out.push({ role: g.role, content })
+    } else if (isPlain(e)) {
+      const p = e as PlainEntry
+      if (p.enabled === false) continue          // 顶层开关
+      const content = seg(p.text)
+      if (content === '') continue
+      out.push({ role: p.role, content })
+    }
+    // 顶层游离子条(异常数据)跳过
+  }
+  return out
+}
