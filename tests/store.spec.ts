@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { createStore, NotFoundError, type PersistJsonLike, type PromptStore } from '../src/store.ts'
+import type { ChildEntry, GroupEntry, PlainEntry } from '../src/types.ts'
 
 function memPersist(): PersistJsonLike {
   const map = new Map<string, unknown>()
@@ -123,18 +124,61 @@ describe('prompt store v3 三类条目 CRUD', () => {
     await expect(store.saveLayout(fid, { children: { e_ghost: [c1.entryId] } })).rejects.toThrow('父条目不存在')
     await expect(store.saveLayout('f_ghost', { entries: [] })).rejects.toBeInstanceOf(NotFoundError)
   })
+})
 
-  it('getMessages:普通独立 + 父聚合 + 空跳过', async () => {
-    await store.createEntry(fid, { name: '系统', role: 'system', text: '你是助手' })
-    const g = await store.createEntry(fid, { name: '父', role: 'user', kind: 'group' })
-    await store.createEntry(fid, { name: 'c1', base: g.entryId, text: '段一' })
-    await store.createEntry(fid, { name: 'c2', base: g.entryId, text: '   ' })
-    await store.createEntry(fid, { name: '空', role: 'user', text: '  ' })
-    const g2 = await store.createEntry(fid, { name: '空父', role: 'assistant', kind: 'group' })
-    await store.createEntry(fid, { name: 'c3', base: g2.entryId, text: '' })
-    expect(await store.getMessages(fid)).toEqual([
-      { role: 'system', content: '你是助手' },
-      { role: 'user', content: '段一' },
-    ])
+describe('prompt store v4 扩展', () => {
+  it('readTree:平铺转树(顶层序 + children 按序)', async () => {
+    const fid: string = (await store.createForm('f')).id
+    const g = await store.createEntry(fid, { name: 'g', role: 'user', kind: 'group' })
+    await store.createEntry(fid, { name: 'c1', role: 'user', text: '一', base: g.entryId })
+    await store.createEntry(fid, { name: 'c2', role: 'user', text: '二', base: g.entryId })
+    await store.createEntry(fid, { name: 'p', role: 'system', text: '顶' })
+    const { top, childrenByParent } = await store.readTree(fid)
+    expect(top.map((e) => e.name)).toEqual(['g', 'p'])
+    expect(childrenByParent[g.entryId].map((c) => c.text)).toEqual(['一', '二'])
+  })
+  it('enabled 读写:顶层条目写入/读出;缺省 undefined(视为 true)', async () => {
+    const fid: string = (await store.createForm('f')).id
+    const e = await store.createEntry(fid, { name: 'p', role: 'user', text: 'hi' })
+    await store.updateEntry(fid, e.entryId, { enabled: false })
+    const rows = await store.listEntries(fid)
+    expect((rows[0] as PlainEntry).enabled).toBe(false)
+    await store.updateEntry(fid, e.entryId, { enabled: true })
+    const rows2 = await store.listEntries(fid)
+    // enabled:true 与缺省同义,读回省略(undefined);false 才显式存储
+    expect((rows2[0] as PlainEntry).enabled).toBeUndefined()
+  })
+  it('enabled 非法(非 boolean/写子条)→ 抛错', async () => {
+    const fid: string = (await store.createForm('f')).id
+    const g = await store.createEntry(fid, { name: 'g', role: 'user', kind: 'group' })
+    const c = await store.createEntry(fid, { name: 'c', text: 'x', base: g.entryId })
+    await expect(store.updateEntry(fid, g.entryId, { enabled: 'no' as never })).rejects.toThrow()
+    await expect(store.updateEntry(fid, c.entryId, { enabled: false })).rejects.toThrow()
+  })
+  it('addRegisteredEntry:创建父(固定 id)+占位符子条;重复/非法 400;父可删(级联)', async () => {
+    const fid: string = (await store.createForm('f')).id
+    const r = await store.addRegisteredEntry(fid, { regId: 'kb-context', name: '知识库上下文' })
+    expect(r.entryId).toBe('kb-context')
+    await expect(store.addRegisteredEntry(fid, { regId: 'kb-context', name: '知识库上下文' })).rejects.toThrow('已添加')
+    const rows = await store.listEntries(fid)
+    expect(rows).toHaveLength(2)
+    const parent = rows[0] as GroupEntry
+    expect(parent.id).toBe('kb-context'); expect(parent.kind).toBe('group')
+    const child = rows[1] as ChildEntry
+    expect(child.placeholder).toEqual({ regId: 'kb-context', name: '知识库上下文' })
+    expect(child.base).toBe('kb-context'); expect(child.text).toBe('')
+    // 占位符保护
+    await expect(store.updateEntry(fid, child.id, { text: '改' })).rejects.toThrow('不可编辑')
+    await expect(store.deleteEntry(fid, child.id)).rejects.toThrow('不可单独删除')
+    await expect(store.createEntry(fid, { name: 'x', text: 'y', base: child.id })).rejects.toThrow()
+    // 注册父 name 锁定
+    await expect(store.updateEntry(fid, 'kb-context', { name: '改名' })).rejects.toThrow('不可修改')
+    // 父删除 = 级联清占位符
+    await store.deleteEntry(fid, 'kb-context')
+    expect(await store.listEntries(fid)).toHaveLength(0)
+  })
+  it('非法 regId(含 ../)拒绝', async () => {
+    const fid: string = (await store.createForm('f')).id
+    await expect(store.addRegisteredEntry(fid, { regId: '../evil', name: 'x' })).rejects.toThrow()
   })
 })

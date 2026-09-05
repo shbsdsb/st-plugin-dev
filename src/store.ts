@@ -1,5 +1,5 @@
-import { contentFor, isChild, isGroup, isPlain } from './messages.ts'
-import type { ChildEntry, Entry, EntryRole, FormRow, GroupEntry, Message, PlainEntry } from './types.ts'
+import { isChild, isGroup, isPlaceholder } from './messages.ts'
+import type { ChildEntry, Entry, EntryRole, FormRow, GroupEntry, PlainEntry } from './types.ts'
 
 export class NotFoundError extends Error {
   constructor(message: string) { super(message); this.name = 'NotFoundError' }
@@ -13,7 +13,7 @@ export interface PersistJsonLike {
 }
 
 export interface EntryCreateInput { name?: string; role?: unknown; text?: unknown; kind?: unknown; base?: unknown }
-export interface EntryUpdateInput { name?: string; role?: unknown; text?: unknown; kind?: unknown; base?: unknown }
+export interface EntryUpdateInput { name?: string; role?: unknown; text?: unknown; kind?: unknown; base?: unknown; enabled?: unknown }
 export interface LayoutInput { entries?: unknown; children?: unknown }
 
 export interface PromptStore {
@@ -26,12 +26,15 @@ export interface PromptStore {
   updateEntry(formId: string, entryId: string, input: EntryUpdateInput): Promise<void>
   deleteEntry(formId: string, entryId: string): Promise<void>
   saveLayout(formId: string, input: LayoutInput): Promise<void>
-  getMessages(formId: string): Promise<Message[]>
+  readTree(formId: string): Promise<{ top: Entry[]; childrenByParent: Record<string, ChildEntry[]> }>
+  addRegisteredEntry(formId: string, input: { regId: string; name: string }): Promise<{ entryId: string }>
 }
 
 const ROOT = 'data/prompt'
 const VALID_ROLES: EntryRole[] = ['system', 'user', 'assistant']
 const MAX_NAME = 50
+/** 注册 id 用作条目文件名,字符集受限防路径穿越 */
+const REG_ID_RE = /^[A-Za-z0-9][A-Za-z0-9._-]*$/
 
 function genId(prefix: string): string {
   return prefix + '_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8)
@@ -88,12 +91,25 @@ async function readEntry(persist: PersistJsonLike, formId: string, id: string): 
   const name = typeof e.name === 'string' ? e.name : '未命名'
   if (e.kind === 'group') {
     const children = Array.isArray(e.children) ? e.children.filter((x): x is string => typeof x === 'string') : []
-    return { id, name, role, kind: 'group', children }
+    return {
+      id, name, role, kind: 'group', children,
+      ...(e.enabled === false ? { enabled: false } : {}),
+    } as GroupEntry
   }
   if (typeof e.base === 'string' && e.base !== '') {
-    return { id, name, base: e.base, text: typeof e.text === 'string' ? e.text : '' }
+    const phRaw = e.placeholder
+    const ph = phRaw && typeof phRaw === 'object'
+      ? { regId: String((phRaw as { regId?: unknown }).regId ?? ''), name: String((phRaw as { name?: unknown }).name ?? '') }
+      : undefined
+    return {
+      id, name, base: e.base, text: typeof e.text === 'string' ? e.text : '',
+      ...(ph && ph.regId ? { placeholder: ph } : {}),
+    } as ChildEntry
   }
-  return { id, name, role, text: typeof e.text === 'string' ? e.text : '' }
+  return {
+    id, name, role, text: typeof e.text === 'string' ? e.text : '',
+    ...(e.enabled === false ? { enabled: false } : {}),
+  } as PlainEntry
 }
 
 /** 顶层条目数组(entries 引用不存在文件则跳过) + 父条目 map */
@@ -118,6 +134,15 @@ async function childrenOf(persist: PersistJsonLike, formId: string, g: GroupEntr
     if (c && isChild(c)) out.push(c)
   }
   return out
+}
+
+/** 父条目 children 中是否含占位符子条(即"注册父") */
+async function readPlaceholderOwner(persist: PersistJsonLike, formId: string, g: GroupEntry): Promise<boolean> {
+  for (const cid of g.children) {
+    const c = await readEntry(persist, formId, cid)
+    if (c && isPlaceholder(c)) return true
+  }
+  return false
 }
 
 export function createStore(persist: PersistJsonLike): PromptStore {
@@ -183,6 +208,7 @@ export function createStore(persist: PersistJsonLike): PromptStore {
         const baseId = input.base as string
         const parent = await readEntry(persist, formId, baseId)
         if (!parent || !isGroup(parent)) throw new Error('base 必须指向本表单存在的父条目')
+        if (isPlaceholder(parent)) throw new Error('占位符子条不能作为父条目')
         const e: ChildEntry = { id: entryId, name: cleanName(input.name), base: baseId, text: cleanText(input.text) }
         await writeEntry(formId, e)
         const g = parent as GroupEntry
@@ -200,27 +226,48 @@ export function createStore(persist: PersistJsonLike): PromptStore {
     async updateEntry(formId, entryId, input) {
       const cur = await readEntry(persist, formId, entryId)
       if (!cur) throw new NotFoundError('条目不存在')
+      if (isPlaceholder(cur)) throw new Error('该子条由插件注册,不可编辑')
       if (input.kind !== undefined && input.kind !== 'group') throw new Error('kind 非法,仅支持 group')
       if (input.kind !== undefined && !isGroup(cur)) throw new Error('kind 不可修改')
       if (input.base !== undefined && !(isChild(cur) && cur.base === String(input.base))) throw new Error('base 不可修改')
+      if (input.enabled !== undefined && typeof input.enabled !== 'boolean') throw new Error('enabled 必须为布尔值')
       if (isGroup(cur)) {
         if (input.text !== undefined) throw new Error('父条目不能包含 text')
-        const g: GroupEntry = { id: cur.id, name: cleanName(input.name ?? cur.name), role: cleanRole(input.role ?? cur.role), kind: 'group', children: cur.children }
+        // 注册父(children 含占位符子条)名称锁定,只允许改 role/enabled
+        if (await readPlaceholderOwner(persist, formId, cur)
+          && input.name !== undefined && cleanName(input.name) !== cur.name) {
+          throw new Error('该条目由插件注册,名称不可修改')
+        }
+        const g: GroupEntry = {
+          id: cur.id, kind: 'group',
+          name: input.name !== undefined ? cleanName(input.name) : cur.name,
+          role: cleanRole(input.role ?? cur.role),
+          children: cur.children,
+          ...(input.enabled === undefined ? {} : { enabled: input.enabled }),
+        }
         await writeEntry(formId, g)
         return
       }
       if (isChild(cur)) {
+        if (input.enabled !== undefined) throw new Error('子条目不支持启用开关')
         const c: ChildEntry = { id: cur.id, name: cleanName(input.name ?? cur.name), base: cur.base, text: cleanText(input.text ?? cur.text) }
         await writeEntry(formId, c)
         return
       }
-      const p: PlainEntry = { id: cur.id, name: cleanName(input.name ?? cur.name), role: cleanRole(input.role ?? cur.role), text: cleanText(input.text ?? cur.text) }
+      const p: PlainEntry = {
+        id: cur.id,
+        name: cleanName(input.name ?? cur.name),
+        role: cleanRole(input.role ?? cur.role),
+        text: cleanText(input.text ?? cur.text),
+        ...(input.enabled === undefined ? {} : { enabled: input.enabled }),
+      }
       await writeEntry(formId, p)
     },
     async deleteEntry(formId, entryId) {
       const f = await readForm(persist, formId)
       const cur = await readEntry(persist, formId, entryId)
       if (!cur) throw new NotFoundError('条目不存在')
+      if (isPlaceholder(cur)) throw new Error('占位符子条不可单独删除,请删除其父条目')
       if (isGroup(cur)) {
         // 级联:先删 children,再从顶层移除父
         for (const cid of cur.children) await persist.delete(entryFile(formId, cid))
@@ -260,24 +307,32 @@ export function createStore(persist: PersistJsonLike): PromptStore {
         }
       }
     },
-    async getMessages(formId) {
+    async readTree(formId) {
       const { top, groupMap } = await loadFormEntries(persist, formId)
-      const out: Message[] = []
+      const childrenByParent: Record<string, ChildEntry[]> = {}
       for (const e of top) {
         if (isGroup(e)) {
           const g = groupMap.get(e.id)!
-          const children = await childrenOf(persist, formId, g)
-          const content = contentFor(e, children)
-          if (content === '') continue
-          out.push({ role: e.role, content })
-        } else if (isPlain(e)) {
-          const content = contentFor(e)
-          if (content === '') continue
-          out.push({ role: e.role, content })
+          childrenByParent[g.id] = await childrenOf(persist, formId, g)
         }
-        // 顶层不应出现子条目;若出现则跳过
       }
-      return out
+      return { top, childrenByParent }
+    },
+    async addRegisteredEntry(formId, input) {
+      const regId = typeof input.regId === 'string' ? input.regId : ''
+      const regName = typeof input.name === 'string' ? input.name.trim() : ''
+      if (!regId || !REG_ID_RE.test(regId)) throw new Error('注册 id 非法:需为非空且仅含字母/数字/._-')
+      if (!regName || regName.length > MAX_NAME) throw new Error(`注册名称最长 ${MAX_NAME} 字符`)
+      const f = await readForm(persist, formId)
+      if (f.entries.includes(regId)) throw new Error('该注册条目已添加')
+      const phId = genId('e')
+      const parent: GroupEntry = { id: regId, name: regName, role: 'user', kind: 'group', children: [phId] }
+      const child: ChildEntry = { id: phId, name: regName, base: regId, text: '', placeholder: { regId, name: regName } }
+      await writeEntry(formId, parent)
+      await writeEntry(formId, child)
+      f.entries.push(regId)
+      await writeForm(formId, f)
+      return { entryId: regId }
     },
   }
 }
