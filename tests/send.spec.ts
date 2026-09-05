@@ -1,11 +1,15 @@
 import { describe, it, expect, vi } from 'vitest'
-import { DatabaseSync } from 'node:sqlite'
-import { createChatStore, type ChatStore } from '../src/store.ts'
 import { sendMessage, type ChainingLike, type LlmLike, type PendingLike } from '../src/send.ts'
+import type { SessionLike } from '../src/session.ts'
 
-function makeDep(over: Partial<{ chaining: ChainingLike; llm: LlmLike }> = {}) {
-  const db = new DatabaseSync(':memory:')
-  const store: ChatStore = createChatStore(db)
+function makeDep(over: Partial<{ chaining: ChainingLike; llm: LlmLike; session: Partial<SessionLike> }> = {}) {
+  const rows: Array<{ role: 'user' | 'assistant'; content: string }> = []
+  const session: SessionLike = {
+    getActive: vi.fn(async () => 's_1'),
+    getMessages: vi.fn(async () => rows.map((r) => ({ role: r.role as 'user' | 'assistant', content: r.content }))),
+    append: vi.fn(async (role, content) => { rows.push({ role, content }) }),
+    ...(over.session ?? {}),
+  }
   const chaining: ChainingLike = {
     active: vi.fn(async () => 'f_chat'),
     hasRegistered: vi.fn(async () => true),
@@ -17,57 +21,57 @@ function makeDep(over: Partial<{ chaining: ChainingLike; llm: LlmLike }> = {}) {
     ...(over.llm ?? {}),
   }
   const pending: PendingLike = { get: () => null, set: vi.fn() }
-  return { store, chaining, llm, pending, db }
+  return { session, chaining, llm, pending, rows }
 }
 
-describe('chat send', () => {
-  it('成功:探测 active+history/input → build(fid) → llm → 落库 user+assistant 两行,返回 reply,pending 清空', async () => {
+describe('chat send v2', () => {
+  it('成功:探测会话+active form+history/input → build → llm → append user+assistant,返回 reply,pending 清空', async () => {
     const d = makeDep()
     const reply = await sendMessage(d, '  你好  ')
     expect(reply).toBe('你好!')
     expect(d.chaining.build).toHaveBeenCalledWith('f_chat')
-    const rows = d.store.listMessages()
-    expect(rows.map((r) => r.role)).toEqual(['user', 'assistant'])
-    expect(rows[0].content).toBe('你好') // trim 后落库
+    expect(d.session.append).toHaveBeenNthCalledWith(1, 'user', '你好')
+    expect(d.session.append).toHaveBeenNthCalledWith(2, 'assistant', '你好!')
     expect(d.pending.set).toHaveBeenLastCalledWith(null)
-    d.db.close()
   })
 
-  it('text 为空 → throw 消息内容不能为空,零落库,pending 未 set', async () => {
+  it('text 为空 → 400 语义,不触碰 session/pending', async () => {
     const d = makeDep()
     await expect(sendMessage(d, '   ')).rejects.toThrow('消息内容不能为空')
-    expect(d.store.listMessages()).toHaveLength(0)
+    expect(d.session.append).not.toHaveBeenCalled()
     expect(d.pending.set).not.toHaveBeenCalled()
-    d.db.close()
   })
 
-  it('无 active → throw 中文,pending 清空,零落库', async () => {
+  it('无 active 会话 → 409「请先在右侧新建或选择会话」,零 append,pending 清空', async () => {
+    const d = makeDep({ session: { getActive: vi.fn(async () => null) } })
+    await expect(sendMessage(d, 'hi')).rejects.toThrow('请先在右侧新建或选择会话')
+    expect(d.session.append).not.toHaveBeenCalled()
+    expect(d.chaining.active).not.toHaveBeenCalled()
+    expect(d.pending.set).toHaveBeenLastCalledWith(null)
+  })
+
+  it('无 active form → 409,零 append', async () => {
     const d = makeDep({ chaining: { active: vi.fn(async () => null) } })
     await expect(sendMessage(d, 'hi')).rejects.toThrow('未选择使用表单')
-    expect(d.store.listMessages()).toHaveLength(0)
-    expect(d.pending.set).toHaveBeenLastCalledWith(null)
-    d.db.close()
+    expect(d.session.append).not.toHaveBeenCalled()
   })
 
-  it('缺注册条目 → throw 中文,零落库', async () => {
+  it('缺注册条目 → 409,零 append', async () => {
     const d = makeDep({ chaining: { hasRegistered: vi.fn(async () => false) } })
     await expect(sendMessage(d, 'hi')).rejects.toThrow('缺少动态注入条目')
-    expect(d.store.listMessages()).toHaveLength(0)
-    d.db.close()
+    expect(d.session.append).not.toHaveBeenCalled()
   })
 
-  it('llm 失败 → 原样上抛中文,零落库,pending 清空', async () => {
+  it('llm 失败 → 原样上抛,零 append,pending 清空', async () => {
     const d = makeDep({ llm: { send: vi.fn(async () => { throw new Error('请求超时') }) } })
     await expect(sendMessage(d, 'hi')).rejects.toThrow('请求超时')
-    expect(d.store.listMessages()).toHaveLength(0)
+    expect(d.session.append).not.toHaveBeenCalled()
     expect(d.pending.set).toHaveBeenLastCalledWith(null)
-    d.db.close()
   })
 
-  it('回复无法解析 → throw 无法解析模型回复,零落库', async () => {
+  it('回复无法解析 → 502 语义,零 append', async () => {
     const d = makeDep({ llm: { send: vi.fn(async () => ({ choices: [] })) } })
     await expect(sendMessage(d, 'hi')).rejects.toThrow('无法解析模型回复')
-    expect(d.store.listMessages()).toHaveLength(0)
-    d.db.close()
+    expect(d.session.append).not.toHaveBeenCalled()
   })
 })

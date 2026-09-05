@@ -1,6 +1,6 @@
-// agent_plugin_dev/chat-plugin/src/routes.ts —— /api/chat/* HTTP 路由
+// agent_plugin_dev/chat-plugin/src/routes.ts —— /api/chat/* HTTP 路由(v2:经 session 适配层)
 import type { IncomingMessage, ServerResponse } from 'node:http'
-import type { ChatStore } from './store.ts'
+import type { SessionLike } from './session.ts'
 
 type Handler = (req: IncomingMessage, res: ServerResponse) => void | Promise<void>
 type Register = (o: { kind: 'exact' | 'prefix'; path: string; handler: Handler }) => () => void
@@ -25,7 +25,7 @@ function fail(res: ServerResponse, status: number, message: string): void {
 function errStatus(e: unknown): number {
   const msg = (e as Error)?.message ?? ''
   if (/不能为空/.test(msg)) return 400
-  if (/未选择使用表单|缺少动态注入条目|未选择预设|未保存密钥|预设不存在/.test(msg)) return 409
+  if (/未选择使用表单|缺少动态注入条目|请先在右侧新建或选择会话/.test(msg)) return 409
   if (/请求失败|请求超时|无法解析模型回复/.test(msg)) return 502
   return 500
 }
@@ -38,12 +38,12 @@ function notAllowed(res: ServerResponse): void {
 
 /**
  * 路由:
- *   GET  /api/chat/messages   全量消息(id 升序)
+ *   GET  /api/chat/messages   当前会话全量消息(id 升序)
  *   POST /api/chat/send       发送一轮({text});失败整轮回滚,错误映射 400/409/502/500
  */
-export function registerRoutes(register: Register, dep: { store: ChatStore; send: (text: string) => Promise<string> }): () => void {
+export function registerRoutes(register: Register, dep: { session: SessionLike; send: (text: string) => Promise<string> }): () => void {
   const disposers: Array<() => void> = []
-  const { store, send } = dep
+  const { session, send } = dep
 
   disposers.push(register({
     kind: 'prefix', path: PREFIX,
@@ -56,7 +56,7 @@ export function registerRoutes(register: Register, dep: { store: ChatStore; send
         if (seg.length === 0) return fail(res, 404, '接口不存在')
         if (seg[0] === 'messages' && seg.length === 1) {
           if (method !== 'GET') return notAllowed(res)
-          return ok(res, store.listMessages())
+          return ok(res, await session.getMessages())
         }
         if (seg[0] === 'send' && seg.length === 1) {
           if (method !== 'POST') return notAllowed(res)
