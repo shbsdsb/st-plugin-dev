@@ -37,22 +37,19 @@ globalThis.requestAnimationFrame = (cb: () => void) => { cb(); return 1 }
 }
 
 describe('ui-tool-plugin WebPlugin', () => {
-  it('mount:注入主题 + 挂载 __uiTools__(含 theme)', () => {
+  it('mount:挂载 __uiTools__(无 theme,仅工具函数)', () => {
     plugin.mount(null as never)
-    expect(headChildren.some((c) => c.id === 'ui-tool-plugin-theme')).toBe(true)
     const api = (globalThis as unknown as { window: { __uiTools__: unknown } }).window.__uiTools__ as Record<string, unknown>
     expect(typeof api).toBe('object')
     expect(typeof (api as Record<string, unknown>).toast).toBe('function')
     expect(typeof (api as Record<string, unknown>).pluginModal).toBe('function')
-    const theme = (api as { theme: Record<string, unknown> }).theme
-    expect(typeof theme.get).toBe('function')
-    expect(typeof theme.install).toBe('function')
-    expect(typeof theme.destroy).toBe('function')
+    expect((api as { theme?: unknown }).theme).toBeUndefined()
+    // 不再注入主题样式
+    expect(headChildren.some((c) => c.id === 'ui-tool-plugin-theme')).toBe(false)
   })
 
-  it('unmount:移除主题/tools 样式 + 删除 __uiTools__', () => {
+  it('unmount:移除 tools 样式 + 删除 __uiTools__', () => {
     plugin.unmount()
-    expect(headChildren.some((c) => c.id === 'ui-tool-plugin-theme')).toBe(false)
     expect(headChildren.some((c) => c.id === 'ui-tool-plugin-tools')).toBe(false)
     expect((globalThis as unknown as { window: { __uiTools__?: unknown } }).window.__uiTools__).toBeUndefined()
   })

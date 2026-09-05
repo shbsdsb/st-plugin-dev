@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "UI 工具库插件:白色玻璃主题(背景 + 插槽美化)+ window.__uiTools__ 前端工具库(13 种悬浮工具)+ theme 主题引擎(小参数 API + install 全量 css/html/js 替换)",
+  "description": "UI 工具库插件(纯工具):window.__uiTools__ 13 种悬浮工具;主题职责已移交 ui-polish(消费 --ui-* token)",
   "main": "lib/index.js",
   "scripts": {
     "build": "tsc -p tsconfig.json && node ../../agent_plugin_feat/bootstrap/src/cli/index.ts web-build --cwd .",
