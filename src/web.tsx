@@ -24,7 +24,7 @@ const webPlugin = {
         render(el: HTMLElement) {
           const btn = document.createElement('button')
           btn.textContent = 'prompt'
-          btn.style.cssText = 'border-radius:16px;padding:0 14px;font-size:12px;font-weight:600;color:#18181b;background:#fff;border:1px solid #d4d4d8;cursor:pointer;height:30px;'
+          btn.style.cssText = 'border-radius:16px;padding:0 14px;font-size:12px;font-weight:600;color:var(--ui-text,#444444);background:var(--ui-surface,#ffffff);border:1px solid var(--ui-border,#e0e0e0);cursor:pointer;height:30px;'
           btn.addEventListener('click', () => {
             tools.pluginModal({
               title: 'Prompt 预设',
