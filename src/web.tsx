@@ -5,7 +5,7 @@ interface SlotsLike {
   unregister(slot: string, name: string): void
 }
 interface ToolsLike {
-  pluginModal(opts: { title: string; content: string | ((el: HTMLElement) => void); source?: string }): void
+  pluginModal(opts: { title: string; content: string | ((el: HTMLElement) => void); source?: string; width?: number }): void
   toast(msg: string): void
 }
 
@@ -29,6 +29,7 @@ const webPlugin = {
             tools.pluginModal({
               title: 'Prompt 预设',
               source: 'prompt',
+              width: 680,
               content: (c: HTMLElement) => { c.appendChild(createPanel((m) => tools.toast(m))) },
             })
           })

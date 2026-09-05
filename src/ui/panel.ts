@@ -25,11 +25,9 @@ export function createPanel(toast: ToastFn): HTMLElement {
   // ===== DOM 骨架 =====
   const formBar = el('div', 'prp row-preset')
   const actionsRow = el('div', 'prp row-actions')
-  const entriesLabel = el('label')
-  entriesLabel.textContent = '条目(父条目聚合其子条目组成一条消息)'
   const listBox = el('div', 'prp entry-list')
   const entriesWrap = el('div', 'prp fg')
-  entriesWrap.append(entriesLabel, listBox)
+  entriesWrap.append(listBox)
   const sendBtn = button('prp send-btn', '预览 Prompt', () => void doPreview())
   sendBtn.disabled = true
   const saveOrderBtn = button('prp save-order-btn', '保存顺序', () => void doSaveOrder())
@@ -349,7 +347,7 @@ export function createPanel(toast: ToastFn): HTMLElement {
     if (!cur) return
     try {
       const payload = await api.previewPrompt(cur.id)
-      openResult('预览(拼接完成,未发送;注册注入已生效)', payload)
+      openResult('预览(静态拼接,注册条目以 JSON 占位符显示,不调用注入)', payload)
       setStatus('预览完成', 'success')
     } catch (e) {
       openResult('预览失败', { ok: false, message: (e as Error)?.message || '预览失败' })
