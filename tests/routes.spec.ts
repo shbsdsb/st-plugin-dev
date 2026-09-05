@@ -65,7 +65,8 @@ describe('multi session routes', () => {
     expect((await c.call('/api/session/active')).json.data).not.toBe(a) // 回退到剩余会话
     expect((await c.call('/api/session/' + a, undefined, 'DELETE')).status).toBe(404)
     expect((await c.call('/api/session/list', undefined, 'POST')).status).toBe(405)
-    expect((await c.call('/api/session/nope')).status).toBe(404)
+    expect((await c.call('/api/session/nope')).status).toBe(405) // 单段资源仅支持 DELETE
+    expect((await c.call('/api/session/x/y')).status).toBe(404) // 未知子路径
     c.dispose(); c.db.close()
   })
 })

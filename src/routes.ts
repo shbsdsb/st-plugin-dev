@@ -72,8 +72,8 @@ export function registerRoutes(register: Register, dep: { svc: MultiSessionServi
           }
           return notAllowed(res)
         }
-        if (seg.length === 1) { // 仅 DELETE /:id 有效;其它方法 → 404(该路径无 GET/PUT 资源语义)
-          if (method !== 'DELETE') return fail(res, 404, '接口不存在')
+        if (seg.length === 1) { // 单段资源仅支持 DELETE;其它方法 → 405
+          if (method !== 'DELETE') return notAllowed(res)
           await svc.deleteSession(seg[0])
           return ok(res, {})
         }
