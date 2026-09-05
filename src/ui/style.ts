@@ -82,6 +82,12 @@ const CSS = `
 .prp .save-order-btn:disabled{opacity:.45;cursor:not-allowed}
 .prp .child-preview{flex:1;min-width:0;font-size:12px;color:var(--ui-text-muted,#888888);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.6;padding-top:6px}
 .prp .block-row .entry-name{flex-shrink:0;max-width:140px}
+.prp .entry-toggle{margin:0 6px;cursor:pointer;accent-color:var(--ui-accent,#333333)}
+.prp .prp-entry-off{opacity:.45}
+.prp .block-row.readonly{opacity:.6;font-style:italic;background:var(--ui-accent-soft,#f0f0f0)}
+.prp .add-reg-btn{border-radius:14px;padding:0 12px;font-size:12px;font-weight:500;border:1px dashed var(--ui-border-strong,#ccc);background:transparent;color:var(--ui-text,#444444);cursor:pointer;height:26px}
+.prp .add-reg-btn:hover:not(:disabled){background:var(--ui-surface,#ffffff);border-style:solid}
+.prp .add-reg-btn:disabled{opacity:.45;cursor:not-allowed}
 `
 export function ensureStyle(): void {
   if (document.getElementById(STYLE_ID)) return

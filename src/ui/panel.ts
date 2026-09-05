@@ -2,7 +2,7 @@ import type { FormRow, PanelState } from './state.ts'
 import { createPanelState, applyList, upsertForm, removeForm, selectForm, setExpand, toggleExpand, toTree } from './state.ts'
 import * as api from './api.ts'
 import type { ChildEntry, Entry, GroupEntry } from '../types.ts'
-import { isGroup, isPlain } from '../messages.ts'
+import { isGroup, isPlain, isPlaceholder } from '../messages.ts'
 import { ensureStyle } from './style.ts'
 import { el, button } from './dom.ts'
 import { openEntryEditor, openGroupCreator, openChildCreator, openChildEditor } from './sub-modal.ts'
@@ -29,7 +29,7 @@ export function createPanel(toast: ToastFn): HTMLElement {
   const listBox = el('div', 'prp entry-list')
   const entriesWrap = el('div', 'prp fg')
   entriesWrap.append(entriesLabel, listBox)
-  const sendBtn = button('prp send-btn', '发送 Prompt', () => void doSend())
+  const sendBtn = button('prp send-btn', '预览 Prompt', () => void doPreview())
   sendBtn.disabled = true
   const saveOrderBtn = button('prp save-order-btn', '保存顺序', () => void doSaveOrder())
   saveOrderBtn.disabled = true
@@ -153,6 +153,7 @@ export function createPanel(toast: ToastFn): HTMLElement {
   function renderTopRow(e: Entry, childrenByParent: Record<string, ChildEntry[]>): HTMLElement {
     const wrap = el('div', 'prp entry-wrap')
     wrap.dataset.entryId = e.id
+    if ((isGroup(e) || isPlain(e)) && e.enabled === false) wrap.classList.add('prp-entry-off')
     const head = el('div', 'prp entry-head')
     const handle = el('span', 'prp drag-handle', '⋮⋮')
     handle.title = '拖动排序(纯前端,点「保存顺序」提交)'
@@ -174,8 +175,12 @@ export function createPanel(toast: ToastFn): HTMLElement {
           title: '编辑父条目', entry: { name: e.name, role: e.role }, withRole: true, withText: false,
           onSave: async (input) => {
             if (!input.name) { toast('名称不能为空'); throw new Error('名称不能为空') }
-            try { await api.updateEntry(curId(), e.id, { name: input.name, role: input.role }); await refreshAll(); toast('已保存') }
-            catch (err) { toastError(err); throw err }
+            try {
+              // 注册父(children 含占位符子条)名称由注册方锁定,只允许改 role
+              const isRegParent = (childrenByParent[e.id] ?? []).some(isPlaceholder)
+              await api.updateEntry(curId(), e.id, isRegParent ? { role: input.role } : { name: input.name, role: input.role })
+              await refreshAll(); toast('已保存')
+            } catch (err) { toastError(err); throw err }
           },
         })
       } else if (isPlain(e)) {
@@ -202,7 +207,22 @@ export function createPanel(toast: ToastFn): HTMLElement {
         })() },
       })
     })
-    head.append(handle, name, role, segPid, caretBtn, spacer, editBtn, delBtn)
+    // 顶层启用开关(v4):仅顶层条目;关闭整树跳过拼接(子条无开关跟随父)
+    const toggle = document.createElement('input')
+    toggle.type = 'checkbox'
+    toggle.className = 'prp entry-toggle'
+    toggle.checked = !((isGroup(e) || isPlain(e)) && e.enabled === false)
+    toggle.title = '启用该条目(关闭后不进入预览/拼接)'
+    toggle.addEventListener('change', () => {
+      void (async () => {
+        try {
+          await api.updateEntry(curId(), e.id, { enabled: toggle.checked })
+          await refreshAll()
+          toast(toggle.checked ? '已启用' : '已停用')
+        } catch (err) { toastError(err); toggle.checked = !toggle.checked }
+      })()
+    })
+    head.append(handle, name, role, segPid, caretBtn, spacer, toggle, editBtn, delBtn)
     wrap.appendChild(head)
     if (group && expanded) {
       wrap.appendChild(renderDetail(e as GroupEntry, childrenByParent))
@@ -252,6 +272,14 @@ export function createPanel(toast: ToastFn): HTMLElement {
     const handle = el('span', 'prp drag-handle', '⋮⋮')
     handle.title = '拖动排序(纯前端,点「保存顺序」提交)'
     const name = el('span', 'prp entry-name', c.name)
+    if (isPlaceholder(c)) {
+      // 占位符子条:动态注入锚点,只读、可拖动、无编辑/删除
+      rowEl.classList.add('readonly')
+      const pin = el('span', 'prp child-preview', `⛁ ${c.placeholder!.name}(动态注入)`)
+      const hint = el('span', 'prp child-preview', '由插件注入,不可编辑')
+      rowEl.append(handle, name, pin, hint)
+      return rowEl
+    }
     const preview = el('span', 'prp child-preview', c.text.trim() === '' ? '(空)' : c.text)
     preview.title = c.text
     const editBtn = button('prp text-btn', '编辑', () => {
@@ -298,14 +326,15 @@ export function createPanel(toast: ToastFn): HTMLElement {
     }
   }
 
-  // ---------- 发送 ----------
+  // ---------- 预览(只拼不发) ----------
   function updateSendAndSave(): void {
     const cur = current()
     const { childrenByParent } = toTree(rows)
     const hasContent = rows.some((e) => {
+      if ((isGroup(e) || isPlain(e)) && e.enabled === false) return false
       if (isGroup(e)) {
         const children = childrenByParent[e.id] ?? []
-        return children.some((c) => c.text.trim() !== '')
+        return children.some((c) => c.text.trim() !== '') || children.some(isPlaceholder)
       }
       if (isPlain(e)) return e.text.trim() !== ''
       return false
@@ -314,17 +343,46 @@ export function createPanel(toast: ToastFn): HTMLElement {
     saveOrderBtn.disabled = !state.dirtyOrder
   }
 
-  async function doSend(): Promise<void> {
+  async function doPreview(): Promise<void> {
     const cur = current()
     if (!cur) return
     try {
-      const payload = await api.sendPrompt(cur.id)
-      openResult('已发送(普通条目独立成消息;父条目聚合其子条目)', payload)
-      setStatus('已发送', 'success')
+      const payload = await api.previewPrompt(cur.id)
+      openResult('预览(拼接完成,未发送;注册注入已生效)', payload)
+      setStatus('预览完成', 'success')
     } catch (e) {
-      openResult('发送失败', { ok: false, message: (e as Error)?.message || '发送失败' })
-      setStatus('发送失败', 'error')
+      openResult('预览失败', { ok: false, message: (e as Error)?.message || '预览失败' })
+      setStatus('预览失败', 'error')
     }
+  }
+
+  /** 打开"添加注册条目"选择弹窗(过滤已在当前表单的) */
+  async function doPickRegistered(): Promise<void> {
+    const cur = current()
+    if (!cur) return
+    try {
+      const list = await api.listRegistered()
+      const existing = new Set(rows.filter((e) => isGroup(e)).map((e) => e.id))
+      const { modal, close } = createLayer('min(420px,92vw)')
+      headOf(modal, '添加注册条目', close)
+      const body = el('div', 'prp float-body')
+      const pool = list.filter((r) => !existing.has(r.id))
+      if (pool.length === 0) body.appendChild(el('div', 'prp block-empty', '暂无可添加的注册条目'))
+      for (const r of pool) {
+        body.appendChild(button('prp dashed-btn', r.name, () => {
+          void (async () => {
+            try {
+              await api.addRegisteredEntry(cur.id, r.id)
+              close()
+              await refreshAll()
+              toast(`已添加「${r.name}」`)
+            } catch (err) { toastError(err) }
+          })()
+        }))
+      }
+      modal.appendChild(body)
+      footOf(modal, [{ label: '关闭', variant: 's', onClick: close }])
+    } catch (e) { toastError(e) }
   }
 
   // ---------- 表单/操作行 ----------
@@ -402,10 +460,12 @@ export function createPanel(toast: ToastFn): HTMLElement {
     actionsRow.innerHTML = ''
     const hasForm = state.forms.length > 0
     const newEntryBtn = button('', '新建条目', () => doCreateEntryWizard())
+    const regBtn = button('prp add-reg-btn', '＋ 注册条目', () => void doPickRegistered())
     const deleteFormBtn = button('danger', '删除表单', () => confirmDeleteForm())
     newEntryBtn.disabled = !hasForm
+    regBtn.disabled = !hasForm
     deleteFormBtn.disabled = !hasForm
-    actionsRow.append(newEntryBtn, deleteFormBtn)
+    actionsRow.append(newEntryBtn, regBtn, deleteFormBtn)
   }
 
   function doCreateEntryWizard(): void {
