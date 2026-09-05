@@ -28,7 +28,8 @@
     "client": {
       "kind": "web",
       "path": "lib/index.cjs",
-      "immed": true
+      "immed": true,
+      "inject": ["ui-polish"]
     }
   }
 }
