@@ -17,6 +17,7 @@ export interface EntryInput {
   text?: string
   kind?: 'group'
   base?: string
+  enabled?: boolean
 }
 export interface LayoutInput { entries?: string[]; children?: Record<string, string[]> }
 
@@ -47,6 +48,14 @@ export function deleteEntry(formId: string, entryId: string): Promise<void> {
 export function saveLayout(formId: string, layout: LayoutInput): Promise<void> {
   return apiFetch(`/api/prompt/forms/${formId}/order`, { method: 'PUT', body: JSON.stringify(layout) }).then(() => undefined)
 }
-export function sendPrompt(formId: string): Promise<unknown> {
-  return apiFetch(`/api/prompt/forms/${formId}/send`, { method: 'POST', body: JSON.stringify({}) }).then((r) => r.data)
+export interface PreviewMessage { role: 'system' | 'user' | 'assistant'; content: string }
+export function previewPrompt(formId: string): Promise<{ messages: PreviewMessage[] }> {
+  return apiFetch(`/api/prompt/forms/${formId}/preview`, { method: 'POST', body: JSON.stringify({}) }).then((r) => r.data as { messages: PreviewMessage[] })
+}
+export interface RegisteredInjection { id: string; name: string }
+export function listRegistered(): Promise<RegisteredInjection[]> {
+  return apiFetch('/api/prompt/registered').then((r) => r.data as RegisteredInjection[])
+}
+export function addRegisteredEntry(formId: string, id: string): Promise<{ entryId: string }> {
+  return apiFetch(`/api/prompt/forms/${formId}/registered-entry`, { method: 'POST', body: JSON.stringify({ id }) }).then((r) => r.data as { entryId: string })
 }
