@@ -8,6 +8,7 @@ interface SlotsLike {
 interface ToolsLike { toast(msg: string): void }
 
 let navTimer: ReturnType<typeof setInterval> | undefined
+let currentPanel: (HTMLElement & { dispose?(): void }) | null = null
 
 const webPlugin = {
   name: 'sessions',
@@ -20,7 +21,9 @@ const webPlugin = {
       slots.register('sidebar-right', {
         name: 'sessions',
         render(el: HTMLElement) {
+          currentPanel?.dispose?.() // st-ui-slots 重复渲染时先清理旧实例的 window 监听
           const panel = createSessionPanel((m) => tools.toast(m))
+          currentPanel = panel
           el.appendChild(panel)
         },
       })
@@ -31,6 +34,8 @@ const webPlugin = {
   },
   unmount() {
     if (navTimer) { clearInterval(navTimer); navTimer = undefined }
+    currentPanel?.dispose?.()
+    currentPanel = null
     const slots = (window as unknown as { __uiSlots__?: SlotsLike }).__uiSlots__
     slots?.unregister('sidebar-right', 'sessions')
   },
