@@ -1,0 +1,4 @@
+# chat-plugin bundle patch(insert 语法声明条目)
+- insert:
+  - name: chat-plugin
+    id: chat-plugin
