@@ -19,6 +19,7 @@ export function createPanel(toast: ToastFn): HTMLElement {
   let state: PanelState = createPanelState()
   let rows: Entry[] = []
   let savingOrder = false // 保存顺序在途保护
+  let activeId: string | null = null // v4.1:使用表单(active form),select 切换/新建时上报
   const toastError = (e: unknown) => toast((e as Error)?.message || '操作失败')
 
   // ===== DOM 骨架 =====
@@ -396,7 +397,7 @@ export function createPanel(toast: ToastFn): HTMLElement {
     for (const f of state.forms) {
       const o = document.createElement('option')
       o.value = f.id
-      o.textContent = f.name
+      o.textContent = f.name + (f.id === activeId ? ' ·使用中' : '')
       if (f.id === state.currentId) o.selected = true
       sel.appendChild(o)
     }
@@ -404,6 +405,7 @@ export function createPanel(toast: ToastFn): HTMLElement {
       state = selectForm(state, sel.value)
       state = { ...state, expandedId: null, dirtyOrder: false, topOrder: [], childOrder: {} }
       void refreshAll(); renderBar()
+      void api.setActiveForm(sel.value).then(() => { activeId = sel.value; renderBar() }).catch(toastError)
     })
     const cur = current()
     formBar.appendChild(sel)
@@ -453,6 +455,7 @@ export function createPanel(toast: ToastFn): HTMLElement {
       state = selectForm(upsertForm(state, { id, name, entryCount: 0 }), id)
       state = { ...state, expandedId: null, dirtyOrder: false, topOrder: [], childOrder: {} }
       await refreshAll(); renderBar(); renderActions(); toast('已创建新表单')
+      void api.setActiveForm(id).then(() => { activeId = id; renderBar() }).catch(toastError)
     } catch (e) { toastError(e) }
   }
 
@@ -553,6 +556,7 @@ export function createPanel(toast: ToastFn): HTMLElement {
           await api.deleteForm(cur.id)
           state = removeForm(state, cur.id)
           state = { ...state, dirtyOrder: false, topOrder: [], childOrder: {} }
+          if (cur.id === activeId) activeId = null // 后端已联动清空 active,此处仅清前端标注
           await refreshAll(); renderBar(); renderActions()
           toast('已删除表单')
         } catch (e) { toastError(e) }
@@ -566,6 +570,8 @@ export function createPanel(toast: ToastFn): HTMLElement {
       state = applyList(state, await api.listForms())
       renderBar(); renderActions()
       await refreshAll()
+      try { activeId = await api.getActiveForm() } catch { /* 后端不支持时静默 */ }
+      renderBar()
     } catch (e) { toastError(e) }
   })()
   return root
