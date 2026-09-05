@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
-import { buildMessages } from '../src/chain.ts'
+import { buildMessages, buildWithActive } from '../src/chain.ts'
 import { createRegisterTable } from '../src/register.ts'
+import { createStore } from '../src/store.ts'
 import type { ChildEntry, Entry, GroupEntry, PlainEntry } from '../src/types.ts'
 
 function reader(top: Entry[], childrenByParent: Record<string, ChildEntry[]>) {
@@ -72,5 +73,53 @@ describe('chain v4 拼接', () => {
     const top: Entry[] = [group({ id: 'a', name: '异步', role: 'user', children: ['ph'] })]
     const msgs = await buildMessages('f', { reader: reader(top, { a: [ph('ph', 'a', 'a', '异步')] }), registry: reg })
     expect(msgs).toEqual([{ role: 'user', content: '异步内容' }])
+  })
+})
+
+function memPersist() {
+  const map = new Map<string, unknown>()
+  return {
+    async read(p: string) { return map.has(p) ? map.get(p) : null },
+    async write(p: string, d: unknown) { map.set(p, d) },
+    async list(p: string) {
+      const prefix = p.endsWith('/') ? p : p + '/'
+      const names = new Set<string>()
+      for (const k of map.keys()) { if (k.startsWith(prefix)) { const seg = k.slice(prefix.length).split('/')[0]; if (seg) names.add(seg) } }
+      return [...names]
+    },
+    async delete(p: string) { for (const k of [...map.keys()]) { if (k === p || k.startsWith(p + '/')) map.delete(k) } },
+  }
+}
+
+describe('prompt chain v4.1 active', () => {
+  it('缺省 formId 用 active;无 active → 中文错', async () => {
+    const s = createStore(memPersist())
+    const reg = createRegisterTable()
+    await expect(buildWithActive(s, reg)).rejects.toThrow('未选择使用表单')
+  })
+
+  it('active 表单可正常拼接;缺省与显式结果一致', async () => {
+    const s = createStore(memPersist())
+    const reg = createRegisterTable()
+    const fid = (await s.createForm('聊天')).id
+    await s.createEntry(fid, { name: '角色', role: 'system', text: '你是助手' })
+    await s.setActiveFormId(fid)
+    const viaActive = await buildWithActive(s, reg)
+    const viaExplicit = await buildWithActive(s, reg, fid)
+    expect(viaActive).toEqual([{ role: 'system', content: '你是助手' }])
+    expect(viaExplicit).toEqual(viaActive)
+  })
+
+  it('active 指向已删表单 → 包装中文错', async () => {
+    const mem = memPersist()
+    const s = createStore(mem)
+    const reg = createRegisterTable()
+    const fid = (await s.createForm('聊天')).id
+    await s.setActiveFormId(fid)
+    await s.deleteForm(fid) // 联动清空 active(见 A1)
+    expect(await s.getActiveFormId()).toBeNull()
+    // 直写悬挂 active(模拟数据不一致):active 指向已不存在的表单
+    await mem.write('data/prompt/active.json', { formId: fid })
+    await expect(buildWithActive(s, reg)).rejects.toThrow('使用表单不存在或已删除,请重新选择')
   })
 })

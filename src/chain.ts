@@ -2,6 +2,7 @@
 import type { ChildEntry, Entry, GroupEntry, Message, PlainEntry } from './types.ts'
 import { isGroup, isPlain, isPlaceholder } from './messages.ts'
 import type { PromptRegisterService } from './register.ts'
+import { NotFoundError, type PromptStore } from './store.ts'
 
 export interface TreeReader {
   readTree(formId: string): Promise<{ top: Entry[]; childrenByParent: Record<string, ChildEntry[]> }>
@@ -60,4 +61,20 @@ export async function buildMessages(formId: string, deps: { reader: TreeReader; 
     // 顶层游离子条(异常数据)跳过
   }
   return out
+}
+
+/** v4.1: formId 缺省取「使用表单(active)」;无 active/表单已删 → 中文错误 */
+export async function buildWithActive(
+  store: PromptStore,
+  registry: PromptRegisterService,
+  formId?: string,
+): Promise<Message[]> {
+  const fid = formId ?? (await store.getActiveFormId())
+  if (!fid) throw new Error('未选择使用表单,请先在 Prompt 面板停留选择一张表单')
+  try {
+    return await buildMessages(fid, { reader: store, registry })
+  } catch (e) {
+    if (e instanceof NotFoundError) throw new Error('使用表单不存在或已删除,请重新选择')
+    throw e
+  }
 }
