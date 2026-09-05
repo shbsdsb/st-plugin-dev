@@ -3,7 +3,7 @@
 // 保留字面量白名单(非主题左列色 / 装饰性):
 //   - data URI select 箭头内 stroke='%23a1a1aa'(icon 非主题色,var 无法进入 data URI,唯一例外)
 //   - box-shadow:0 1px 2px rgba(0,0,0,.04) / 0 6px 20px rgba(0,0,0,.08)(装饰性阴影,无对应 token)
-//   - #e8e8ea(fetch-btn/item hover-active 深灰,表外值;归 accent-soft 将丢失 hover/active 层次,保留)
+//   - #e8e8ea(fetch-btn/item hover-active 深灰,表外值;已归 --ui-accent-soft 回退保留原值)
 const STYLE_ID = 'llm-plugin-style'
 
 const CSS = `
@@ -55,7 +55,7 @@ const CSS = `
 .llm .model-fetch-btn{display:flex;align-items:center;gap:6px;padding:0 16px;border:none;border-left:1px solid var(--ui-border,#e0e0e0);background:var(--ui-accent-soft,#f0f0f0);color:var(--ui-text,#444444);font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;transition:background .15s,transform .1s;user-select:none;flex-shrink:0;}
 .llm .model-fetch-btn .arrow{display:inline-block;font-size:10px;transition:transform .25s ease;}
 .llm .model-fetch-btn .arrow.open{transform:rotate(180deg);}
-.llm .model-fetch-btn:hover{background:#e8e8ea;}
+.llm .model-fetch-btn:hover{background:var(--ui-accent-soft,#e8e8ea);}
 .llm .model-fetch-btn:active{transform:scale(.96);}
 .llm .model-fetch-btn .label-text{font-size:12px;}
 @media (max-width:480px){.llm .model-fetch-btn .label-text{font-size:11px;}.llm .model-fetch-btn{padding:0 10px;gap:4px;}}
@@ -65,7 +65,7 @@ const CSS = `
 @keyframes dropIn{from{opacity:0;transform:translateY(-6px);}to{opacity:1;transform:translateY(0);}}
 .llm .model-dropdown .item{display:flex;align-items:center;justify-content:space-between;padding:9px 14px;font-size:13px;color:var(--ui-text,#444444);cursor:pointer;transition:background .1s;gap:8px;}
 .llm .model-dropdown .item:hover{background:var(--ui-accent-soft,#f0f0f0);}
-.llm .model-dropdown .item:active{background:#e8e8ea;}
+.llm .model-dropdown .item:active{background:var(--ui-accent-soft,#e8e8ea);}
 .llm .model-dropdown .item .name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .llm .model-dropdown .item .check{color:var(--ui-text,#444444);font-weight:600;font-size:13px;flex-shrink:0;}
 .llm .model-dropdown .item.active{background:var(--ui-accent-soft,#f0f0f0);}
