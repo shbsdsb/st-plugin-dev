@@ -4,17 +4,12 @@ export function isGroup(e: Entry): e is GroupEntry { return (e as GroupEntry).ki
 export function isChild(e: Entry): e is ChildEntry { return typeof (e as ChildEntry).base === 'string' }
 export function isPlain(e: Entry): e is PlainEntry { return !isGroup(e) && !isChild(e) }
 
-/** 普通条目或子条目的可发送文本(trim 非空才有效) */
+/** 普通条目或子条目的可发送文本(trim 语义在调用方) */
 export function entryText(e: PlainEntry | ChildEntry): string {
   return typeof e.text === 'string' ? e.text : ''
 }
 
-/** 前端发送可用性 + 组装共用:children 需已按序(由调用方传 childrenMap[父id] 对应条目) */
-export function contentFor(e: Entry, children: ChildEntry[] = []): string {
-  if (isGroup(e)) {
-    const parts = children.map((c) => c.text).filter((s) => typeof s === 'string' && s.trim() !== '')
-    return parts.join('\n\n')
-  }
-  const t = entryText(e as PlainEntry | ChildEntry)
-  return t.trim() === '' ? '' : t
+/** 占位符子条:由 registered-entry 创建、带 placeholder 关联字段(见 spec D10/D11) */
+export function isPlaceholder(e: Entry): boolean {
+  return isChild(e) && (e as ChildEntry).placeholder !== undefined
 }
