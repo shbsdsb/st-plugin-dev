@@ -2,7 +2,7 @@ import { Context } from 'cordis'
 import { registerRoutes } from './routes.ts'
 import { createStore, type PromptStore } from './store.ts'
 import { createRegisterTable, type PromptRegisterService } from './register.ts'
-import { buildMessages } from './chain.ts'
+import { buildWithActive } from './chain.ts'
 import type { Message } from './types.ts'
 
 declare module 'cordis' {
@@ -12,7 +12,11 @@ declare module 'cordis' {
     }
     persistJson: { read(p: string): Promise<unknown>; write(p: string, d: unknown): Promise<void>; list(p: string): Promise<string[]>; delete(p: string): Promise<void> }
     promptRegister: PromptRegisterService
-    promptChaining: { build(formId: string): Promise<Message[]> }
+    promptChaining: {
+      active(): Promise<string | null>
+      hasRegistered(formId: string, regId: string): Promise<boolean>
+      build(formId?: string): Promise<Message[]>
+    }
   }
 }
 
@@ -30,7 +34,11 @@ export function apply(ctx: Context, _config: Record<string, unknown>) {
     try {
       const store: PromptStore = createStore(ctx.persistJson)
       const registry = createRegisterTable()
-      const chaining = { build: (formId: string) => buildMessages(formId, { reader: store, registry }) }
+      const chaining = {
+        active: () => store.getActiveFormId(),
+        hasRegistered: (formId: string, regId: string) => store.hasRegisteredEntry(formId, regId),
+        build: (formId?: string) => buildWithActive(store, registry, formId),
+      }
       disposeReg = ctx.provide('promptRegister', registry)
       disposeChain = ctx.provide('promptChaining', chaining)
       disposeRoutes = registerRoutes(ctx.webServer.register.bind(ctx.webServer), { store, registry, chaining })

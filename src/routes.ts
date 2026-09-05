@@ -43,7 +43,8 @@ function notAllowed(res: ServerResponse): void {
 }
 
 /**
- * 路由分派(spec v4 §7):
+ * 路由分派(spec v4.1 §3.3):
+ *   GET/PUT /api/prompt/active                     使用表单(active form)读写
  *   GET/POST /api/prompt/forms                     表单集合
  *   PUT/DELETE /api/prompt/forms/:id               改名/删除
  *   GET/POST /api/prompt/forms/:id/entries         平铺条目 / 建条目(普通|父|子)
@@ -56,7 +57,11 @@ function notAllowed(res: ServerResponse): void {
 export function registerRoutes(register: Register, dep: {
   store: PromptStore
   registry: PromptRegisterService
-  chaining: { build(formId: string): Promise<Message[]> }
+  chaining: {
+    active(): Promise<string | null>
+    hasRegistered(formId: string, regId: string): Promise<boolean>
+    build(formId?: string): Promise<Message[]>
+  }
 }): () => void {
   const disposers: Array<() => void> = []
   const { store, registry, chaining } = dep
@@ -73,6 +78,15 @@ export function registerRoutes(register: Register, dep: {
         if (seg[0] === 'registered' && seg.length === 1) {
           if (method !== 'GET') return notAllowed(res)
           return ok(res, registry.list())
+        }
+        if (seg[0] === 'active' && seg.length === 1) {
+          if (method === 'GET') return ok(res, await store.getActiveFormId())
+          if (method === 'PUT') {
+            const { formId } = await parseBody<{ formId?: unknown }>(req)
+            await store.setActiveFormId(String(formId ?? ''))
+            return ok(res, { formId: String(formId ?? '') })
+          }
+          return notAllowed(res)
         }
         if (seg[0] !== 'forms') return fail(res, 404, '接口不存在')
         if (seg.length === 1) {

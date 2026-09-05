@@ -59,3 +59,9 @@ export function listRegistered(): Promise<RegisteredInjection[]> {
 export function addRegisteredEntry(formId: string, id: string): Promise<{ entryId: string }> {
   return apiFetch(`/api/prompt/forms/${formId}/registered-entry`, { method: 'POST', body: JSON.stringify({ id }) }).then((r) => r.data as { entryId: string })
 }
+export function getActiveForm(): Promise<string | null> {
+  return apiFetch('/api/prompt/active').then((r) => r.data as string | null)
+}
+export function setActiveForm(formId: string): Promise<void> {
+  return apiFetch('/api/prompt/active', { method: 'PUT', body: JSON.stringify({ formId }) }).then(() => undefined)
+}

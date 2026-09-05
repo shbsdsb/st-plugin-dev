@@ -29,7 +29,11 @@ function memPersist(): PersistJsonLike {
 function capture() {
   const store: PromptStore = createStore(memPersist())
   const registry = createRegisterTable()
-  const chaining = { build: (formId: string) => buildMessages(formId, { reader: store, registry }) }
+  const chaining = {
+    active: () => Promise.resolve(null),
+    hasRegistered: () => Promise.resolve(false),
+    build: (formId: string) => buildMessages(formId, { reader: store, registry }),
+  }
   const handlers = new Map<string, (req: IncomingMessage, res: ServerResponse) => void | Promise<void>>()
   const dispose = registerRoutes((o) => { handlers.set(o.path, o.handler); return () => handlers.delete(o.path) }, { store, registry, chaining })
   const call = async (path: string, body?: unknown, method = 'GET') => {
@@ -131,6 +135,18 @@ describe('prompt routes v4', () => {
     const r = await c.call(`/api/prompt/forms/${fid}/send`, {}, 'POST')
     expect(r.json.ok).toBe(false)
     expect(r.status).toBe(404)
+    c.dispose()
+  })
+})
+
+describe('prompt routes v4.1 active', () => {
+  it('active GET 默认 null;PUT 后 GET 有值;PUT 不存在表单 → 404', async () => {
+    const c = capture()
+    expect((await c.call('/api/prompt/active')).json.data).toBeNull()
+    const fid: string = (await c.call('/api/prompt/forms', { name: '聊天' }, 'POST')).json.data.id
+    expect((await c.call('/api/prompt/active', { formId: fid }, 'PUT')).json.ok).toBe(true)
+    expect((await c.call('/api/prompt/active')).json.data).toBe(fid)
+    expect((await c.call('/api/prompt/active', { formId: 'f_ghost' }, 'PUT')).status).toBe(404)
     c.dispose()
   })
 })
