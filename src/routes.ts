@@ -62,6 +62,7 @@ export function registerRoutes(register: Register, dep: {
     hasRegistered(formId: string, regId: string): Promise<boolean>
     build(formId?: string): Promise<Message[]>
   }
+  preview: (formId: string) => Promise<Message[]>
 }): () => void {
   const disposers: Array<() => void> = []
   const { store, registry, chaining } = dep
@@ -140,7 +141,7 @@ export function registerRoutes(register: Register, dep: {
         }
         if (sub === 'preview' && seg.length === 3) {
           if (method !== 'POST') return notAllowed(res)
-          const messages = await chaining.build(fid)
+          const messages = await dep.preview(fid)
           if (messages.length === 0) return fail(res, 400, '当前表单没有可拼接的内容')
           return ok(res, { messages })
         }

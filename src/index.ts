@@ -2,7 +2,7 @@ import { Context } from 'cordis'
 import { registerRoutes } from './routes.ts'
 import { createStore, type PromptStore } from './store.ts'
 import { createRegisterTable, type PromptRegisterService } from './register.ts'
-import { buildWithActive } from './chain.ts'
+import { buildWithActive, buildPreview } from './chain.ts'
 import type { Message } from './types.ts'
 
 declare module 'cordis' {
@@ -41,7 +41,7 @@ export function apply(ctx: Context, _config: Record<string, unknown>) {
       }
       disposeReg = ctx.provide('promptRegister', registry)
       disposeChain = ctx.provide('promptChaining', chaining)
-      disposeRoutes = registerRoutes(ctx.webServer.register.bind(ctx.webServer), { store, registry, chaining })
+      disposeRoutes = registerRoutes(ctx.webServer.register.bind(ctx.webServer), { store, registry, chaining, preview: (formId: string) => buildPreview(formId, store) })
       return () => {
         disposeRoutes?.()
         disposeRoutes = null

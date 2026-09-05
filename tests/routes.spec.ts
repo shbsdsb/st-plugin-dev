@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { registerRoutes } from '../src/routes.ts'
 import { createStore, type PersistJsonLike, type PromptStore } from '../src/store.ts'
@@ -34,8 +34,9 @@ function capture() {
     hasRegistered: () => Promise.resolve(false),
     build: (formId: string) => buildMessages(formId, { reader: store, registry }),
   }
+  const preview = vi.fn(async (formId: string) => chaining.build(formId))
   const handlers = new Map<string, (req: IncomingMessage, res: ServerResponse) => void | Promise<void>>()
-  const dispose = registerRoutes((o) => { handlers.set(o.path, o.handler); return () => handlers.delete(o.path) }, { store, registry, chaining })
+  const dispose = registerRoutes((o) => { handlers.set(o.path, o.handler); return () => handlers.delete(o.path) }, { store, registry, chaining, preview })
   const call = async (path: string, body?: unknown, method = 'GET') => {
     const h = handlers.get('/api/prompt/')!
     const req = {
@@ -50,7 +51,7 @@ function capture() {
     await h(req, res)
     return { status, json: JSON.parse(out || '{}') }
   }
-  return { store, registry, call, dispose }
+  return { store, registry, preview, call, dispose }
 }
 
 describe('prompt routes v3', () => {
@@ -116,16 +117,17 @@ describe('prompt routes v4', () => {
     c.dispose()
   })
 
-  it('preview:拼接含动态注入;无 llm 依赖;空表单 400', async () => {
+  it('preview:走 preview 函数;无 llm 依赖;空表单 400 中文', async () => {
     const c = capture()
     const fid: string = (await c.call('/api/prompt/forms', { name: '客服' }, 'POST')).json.data.id
     const empty = await c.call(`/api/prompt/forms/${fid}/preview`, {}, 'POST')
-    expect(empty.json.ok).toBe(false)
-    c.registry.register({ id: 'kb', name: '知识库', fn: () => '知识内容' })
-    await c.call(`/api/prompt/forms/${fid}/registered-entry`, { id: 'kb' }, 'POST')
+    expect(empty.status).toBe(400)
+    expect(empty.json.message).toBe('当前表单没有可拼接的内容')
+    await c.call(`/api/prompt/forms/${fid}/entries`, { name: '角色', role: 'system', text: '你是助手' }, 'POST')
     const pv = await c.call(`/api/prompt/forms/${fid}/preview`, {}, 'POST')
     expect(pv.json.ok).toBe(true)
-    expect(pv.json.data.messages).toEqual([{ role: 'user', content: '知识内容' }])
+    expect(pv.json.data.messages).toEqual([{ role: 'system', content: '你是助手' }])
+    expect(c.preview).toHaveBeenCalledWith(fid)
     c.dispose()
   })
 
