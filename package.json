@@ -25,7 +25,7 @@
       "kind": "web",
       "path": "lib/index.cjs",
       "immed": true,
-      "inject": ["st-ui-slots"]
+      "inject": ["ui-polish", "st-ui-slots"]
     }
   }
 }
