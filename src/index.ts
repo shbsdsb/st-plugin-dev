@@ -16,16 +16,15 @@ const ConfigSchema = {
   },
 }
 
-function resolveStHome(ctx: Context): string | null {
-  const env = (ctx as unknown as { env?: Record<string, string | undefined> }).env
-  return env?.ST_HOME ?? process.env.ST_HOME ?? null
+function resolveStHome(): string | null {
+  return process.env.ST_HOME ?? null
 }
 
 export function apply(ctx: Context, rawConfig: unknown) {
   const config = normalizeConfig(rawConfig)
   ctx.effect(() => {
     let disposeObserver: (() => void) | null = null
-    const stHome = resolveStHome(ctx)
+    const stHome = resolveStHome()
     if (config.file && !stHome) {
       ctx.logger.warn('[logger-plugin] 未设置 ST_HOME,降级为仅终端输出')
     }
